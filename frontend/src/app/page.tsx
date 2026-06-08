@@ -21,10 +21,6 @@ export default function Home() {
   const [authPass, setAuthPass] = useState("");
   const [authError, setAuthError] = useState("");
 
-  // Admin
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [dashboard, setDashboard] = useState<any>(null);
-  const [reviews, setReviews] = useState<any[]>([]);
   const [lastPlanId, setLastPlanId] = useState<string>("");
 
   // Unit plan
@@ -277,18 +273,7 @@ export default function Home() {
             <button onClick={loadHistory} className="text-xs text-gray-500 hover:text-amber-700 px-2 py-1 rounded">📋 历史</button>
             <button onClick={() => { setShowCollab(!showCollab); if (!showCollab) loadCollab(); }} className="text-xs text-gray-500 hover:text-blue-700 px-2 py-1 rounded">👥 教研</button>
             {(userRole === "admin" || userRole === "reviewer") && (
-              <button onClick={async () => {
-                setShowAdmin(!showAdmin);
-                if (!showAdmin) {
-                  const [dr, rr] = await Promise.all([
-                    fetch(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-                    fetch(`${API}/admin/reviews`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-                  ]);
-                  setDashboard(dr); setReviews(rr.reviews || []);
-                }
-              }} className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded font-medium">
-                ⚙️ 管理
-              </button>
+              <a href="/admin" className="text-xs text-amber-600 hover:text-amber-800 px-2 py-1 rounded font-medium">⚙️ 管理</a>
             )}
             <span className="text-xs text-gray-400">{username}{userRole === "admin" ? "(管理员)" : userRole === "reviewer" ? "(教研组长)" : ""}</span>
             <button onClick={doLogout} className="text-xs text-gray-400 hover:text-red-600 px-2 py-1 rounded">退出</button>
@@ -427,74 +412,6 @@ export default function Home() {
               </div>
             )}
 
-            {/* Admin Dashboard */}
-            {showAdmin && dashboard && (
-              <div className="bg-white rounded-xl shadow-sm border border-amber-200 p-5 mb-4">
-                <h2 className="text-base font-bold text-amber-900 mb-4">📊 管理仪表盘</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <div className="bg-amber-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-amber-700">{dashboard.total_users || 0}</div>
-                    <div className="text-xs text-gray-500">教师数</div>
-                  </div>
-                  <div className="bg-green-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-green-700">{dashboard.total_plans || 0}</div>
-                    <div className="text-xs text-gray-500">生成教案</div>
-                  </div>
-                  <div className="bg-blue-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-blue-700">{dashboard.review_stats?.approved || 0}</div>
-                    <div className="text-xs text-gray-500">已批准</div>
-                  </div>
-                  <div className="bg-orange-50 rounded-lg p-3 text-center">
-                    <div className="text-2xl font-bold text-orange-700">{dashboard.review_stats?.pending || 0}</div>
-                    <div className="text-xs text-gray-500">待审核</div>
-                  </div>
-                </div>
-                {/* 年级覆盖 */}
-                <div className="mb-4">
-                  <h3 className="text-xs font-semibold text-gray-600 mb-2">年级覆盖</h3>
-                  <div className="flex gap-2 flex-wrap">
-                    {(Object.entries(dashboard.grade_coverage || {}) as [string, number][]).map(([g, n]) => (
-                      <span key={g} className="bg-amber-100 text-amber-800 text-xs px-2 py-0.5 rounded">{g}: {n}课</span>
-                    ))}
-                  </div>
-                </div>
-                {/* 审核队列 */}
-                {reviews.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-gray-600 mb-2">审核队列 ({reviews.length})</h3>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {reviews.map((r: any) => (
-                        <div key={r.id} className={`flex items-center justify-between text-xs p-2 rounded ${r.status === "pending" ? "bg-yellow-50" : r.status === "approved" ? "bg-green-50" : "bg-red-50"}`}>
-                          <div>
-                            <span className="font-medium">{r.username}</span> · 《{r.lesson}》{r.grade}
-                            <span className={`ml-2 px-1 py-0.5 rounded text-xs ${r.status === "pending" ? "bg-yellow-200 text-yellow-800" : r.status === "approved" ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}>
-                              {r.status === "pending" ? "待审" : r.status === "approved" ? "已通过" : "已打回"}
-                            </span>
-                          </div>
-                          {r.status === "pending" && (
-                            <div className="flex gap-1">
-                              <button onClick={async () => {
-                                await fetch(`${API}/admin/reviews/${r.id}/approve`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-                                const rr = await fetch(`${API}/admin/reviews`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-                                setReviews(rr.reviews || []);
-                                const dr = await fetch(`${API}/admin/dashboard`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-                                setDashboard(dr);
-                              }} className="bg-green-500 text-white px-2 py-0.5 rounded">通过</button>
-                              <button onClick={async () => {
-                                await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
-                                const rr = await fetch(`${API}/admin/reviews`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-                                setReviews(rr.reviews || []);
-                              }} className="bg-red-500 text-white px-2 py-0.5 rounded">打回</button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Unit Plan */}
             {unitPlan && (
               <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5 mb-4">
@@ -598,7 +515,7 @@ export default function Home() {
             )}
 
             {/* Empty */}
-            {!loading && !lessonPlan && !examAnalysis && !showAdmin && (
+            {!loading && !lessonPlan && !examAnalysis && (
               <div className="text-center py-16 text-gray-400 select-none">
                 <div className="text-4xl mb-3">📚</div>
                 <p className="text-lg font-medium text-gray-500">左侧目录选课，点击生成</p>
