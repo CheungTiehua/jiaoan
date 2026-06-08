@@ -16,6 +16,11 @@ from scripts.all_textbooks import GRADE_TEXTBOOKS
 from auth import (
     register_user, login_user, logout_user, get_user_from_token,
     list_users, save_history, get_history, get_history_detail,
+    get_user_role,
+)
+from admin_api import (
+    submit_for_review, get_review_queue, get_review_detail,
+    approve_review, reject_review, get_dashboard_stats, set_user_role,
 )
 
 app = FastAPI(
@@ -64,6 +69,7 @@ class GenerateResponse(BaseModel):
     peer_analysis: str = Field(default="")
     lesson_plan: str = Field(default="")
     teaching_guide: str = Field(default="")
+    record_id: str = Field(default="")
 
 
 class ReviseRequest(BaseModel):
@@ -112,7 +118,8 @@ async def login(req: AuthRequest):
     token = login_user(req.username, req.password)
     if not token:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
-    return {"token": token, "username": req.username}
+    role = get_user_role(req.username)
+    return {"token": token, "username": req.username, "role": role}
 
 
 @app.post("/api/logout")
@@ -140,8 +147,8 @@ async def generate(req: GenerateRequest, username: str = Depends(require_auth)):
             requirements=req.requirements.strip(),
             class_hours=req.class_hours, semester=req.semester
         )
-        # 保存历史
-        save_history(username, req.grade, req.lesson.strip(), result)
+        record_id = save_history(username, req.grade, req.lesson.strip(), result)
+        result["record_id"] = record_id
         return GenerateResponse(**result)
     except RuntimeError as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -179,6 +186,73 @@ async def history_detail(record_id: str):
             if detail:
                 return detail
     raise HTTPException(status_code=404, detail="记录不存在")
+
+
+# ---- Review API ----
+
+class ReviewSubmitRequest(BaseModel):
+    record_id: str
+
+@app.post("/api/review/submit")
+async def review_submit(req: ReviewSubmitRequest, username: str = Depends(require_auth)):
+    ok = submit_for_review(username, req.record_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return {"message": "已提交审核"}
+
+
+# ---- Admin API ----
+
+def require_admin_or_reviewer(username: str = Depends(require_auth)) -> str:
+    role = get_user_role(username)
+    if role not in ("admin", "reviewer"):
+        raise HTTPException(status_code=403, detail="需要管理员或教研组长权限")
+    return username
+
+def require_admin(username: str = Depends(require_auth)) -> str:
+    if get_user_role(username) != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return username
+
+@app.get("/api/admin/dashboard")
+async def admin_dashboard(username: str = Depends(require_admin_or_reviewer)):
+    return get_dashboard_stats()
+
+@app.get("/api/admin/reviews")
+async def admin_reviews(username: str = Depends(require_admin_or_reviewer)):
+    return {"reviews": get_review_queue()}
+
+@app.get("/api/admin/reviews/{record_id}")
+async def admin_review_detail(record_id: str, username: str = Depends(require_admin_or_reviewer)):
+    detail = get_review_detail(record_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="审核记录不存在")
+    return detail
+
+@app.post("/api/admin/reviews/{record_id}/approve")
+async def admin_approve(record_id: str, username: str = Depends(require_admin_or_reviewer)):
+    ok = approve_review(record_id, username)
+    if not ok:
+        raise HTTPException(status_code=404, detail="审核记录不存在")
+    return {"message": "已批准"}
+
+@app.post("/api/admin/reviews/{record_id}/reject")
+async def admin_reject(record_id: str, username: str = Depends(require_admin_or_reviewer)):
+    # 从 query 参数获取打回意见
+    from fastapi import Query
+    ok = reject_review(record_id, username, "")
+    if not ok:
+        raise HTTPException(status_code=404, detail="审核记录不存在")
+    return {"message": "已打回"}
+
+@app.post("/api/admin/users/set-role")
+async def admin_set_role(req: dict, username: str = Depends(require_admin)):
+    target = req.get("username", "")
+    role = req.get("role", "")
+    ok = set_user_role(target, role)
+    if not ok:
+        raise HTTPException(status_code=400, detail="设置失败")
+    return {"message": f"已将 {target} 的角色设为 {role}"}
 
 
 if __name__ == "__main__":

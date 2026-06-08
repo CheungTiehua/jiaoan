@@ -159,10 +159,13 @@ HISTORY_DIR = DATA_DIR / "history"
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def save_history(username: str, grade: str, lesson: str, plan: dict):
-    """保存生成记录"""
+def save_history(username: str, grade: str, lesson: str, plan: dict) -> str:
+    """保存生成记录，返回 record_id"""
     user_dir = HISTORY_DIR / username
     user_dir.mkdir(parents=True, exist_ok=True)
+
+    ts = int(time.time() * 1000)
+    filepath = user_dir / f"{ts}.json"
 
     record = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -173,11 +176,8 @@ def save_history(username: str, grade: str, lesson: str, plan: dict):
         "lesson_plan": plan.get("lesson_plan", ""),
         "teaching_guide": plan.get("teaching_guide", ""),
     }
-
-    # 用时间戳作文件名
-    ts = int(time.time() * 1000)
-    filepath = user_dir / f"{ts}.json"
     filepath.write_text(json.dumps(record, ensure_ascii=False, indent=2))
+    return str(ts)
 
 
 def get_history(username: str, limit: int = 20) -> list[dict]:
