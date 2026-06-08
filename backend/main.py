@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from rag import generate_lesson, revise_lesson
+from rag import generate_lesson, revise_lesson, generate_unit_plan, generate_reflection
 from scripts.all_textbooks import GRADE_TEXTBOOKS
 from auth import (
     register_user, login_user, logout_user, get_user_from_token,
@@ -21,6 +21,11 @@ from auth import (
 from admin_api import (
     submit_for_review, get_review_queue, get_review_detail,
     approve_review, reject_review, get_dashboard_stats, set_user_role,
+)
+from collab import (
+    create_group, list_groups, join_group, get_user_groups,
+    share_plan, get_group_plans, assign_task, get_group_tasks,
+    complete_task, add_comment,
 )
 
 app = FastAPI(
@@ -253,6 +258,97 @@ async def admin_set_role(req: dict, username: str = Depends(require_admin)):
     if not ok:
         raise HTTPException(status_code=400, detail="设置失败")
     return {"message": f"已将 {target} 的角色设为 {role}"}
+
+
+# ---- 单元规划 API ----
+
+class UnitPlanRequest(BaseModel):
+    grade: str = Field(default="三年级")
+    unit: str = Field(default="第六单元")
+    semester: str = Field(default="上")
+
+@app.post("/api/unit-plan")
+async def unit_plan(req: UnitPlanRequest, username: str = Depends(require_auth)):
+    try:
+        result = generate_unit_plan(req.grade, req.unit, req.semester)
+        return {"unit_plan": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+
+
+# ---- 教研协作 API ----
+
+@app.get("/api/collab/groups")
+async def collab_groups(username: str = Depends(require_auth)):
+    return {"groups": list_groups(), "my_groups": get_user_groups(username)}
+
+@app.post("/api/collab/groups/create")
+async def collab_create(req: dict, username: str = Depends(require_auth)):
+    r = create_group(req.get("name", ""), username)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["msg"])
+    return r
+
+@app.post("/api/collab/groups/join")
+async def collab_join(req: dict, username: str = Depends(require_auth)):
+    r = join_group(req.get("name", ""), username)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["msg"])
+    return r
+
+@app.post("/api/collab/share")
+async def collab_share(req: dict, username: str = Depends(require_auth)):
+    r = share_plan(username, req.get("group", ""), req.get("grade", ""),
+                   req.get("lesson", ""), req.get("record_id", ""))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["msg"])
+    return r
+
+@app.get("/api/collab/groups/{group_name}/plans")
+async def collab_plans(group_name: str, username: str = Depends(require_auth)):
+    return {"plans": get_group_plans(group_name)}
+
+@app.post("/api/collab/tasks/assign")
+async def collab_assign(req: dict, username: str = Depends(require_auth)):
+    r = assign_task(req.get("group", ""), req.get("assigned_to", ""),
+                    req.get("lesson", ""), username)
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["msg"])
+    return r
+
+@app.get("/api/collab/groups/{group_name}/tasks")
+async def collab_tasks(group_name: str, username: str = Depends(require_auth)):
+    return {"tasks": get_group_tasks(group_name)}
+
+@app.post("/api/collab/tasks/complete")
+async def collab_complete(req: dict, username: str = Depends(require_auth)):
+    r = complete_task(req.get("group", ""), req.get("task_index", 0))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["msg"])
+    return r
+
+@app.post("/api/collab/comment")
+async def collab_comment(req: dict, username: str = Depends(require_auth)):
+    r = add_comment(req.get("group", ""), req.get("plan_index", 0),
+                    username, req.get("text", ""))
+    if not r["ok"]:
+        raise HTTPException(status_code=400, detail=r["msg"])
+    return r
+
+
+# ---- 课后反思 API ----
+
+class ReflectionRequest(BaseModel):
+    lesson: str = Field(default="")
+    lesson_plan: str = Field(default="")
+
+@app.post("/api/reflect")
+async def reflect(req: ReflectionRequest, username: str = Depends(require_auth)):
+    try:
+        result = generate_reflection(req.lesson, req.lesson_plan)
+        return {"reflection": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
 
 
 if __name__ == "__main__":

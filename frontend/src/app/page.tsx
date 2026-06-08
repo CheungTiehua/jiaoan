@@ -27,6 +27,24 @@ export default function Home() {
   const [reviews, setReviews] = useState<any[]>([]);
   const [lastPlanId, setLastPlanId] = useState<string>("");
 
+  // Unit plan
+  const [unitPlan, setUnitPlan] = useState("");
+  const [loadingUnit, setLoadingUnit] = useState(false);
+
+  // Collab
+  const [showCollab, setShowCollab] = useState(false);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [myGroups, setMyGroups] = useState<string[]>([]);
+  const [activeGroup, setActiveGroup] = useState("");
+  const [groupPlans, setGroupPlans] = useState<any[]>([]);
+  const [groupTasks, setGroupTasks] = useState<any[]>([]);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [collabComment, setCollabComment] = useState("");
+
+  // Reflection
+  const [reflection, setReflection] = useState("");
+  const [loadingReflect, setLoadingReflect] = useState(false);
+
   // UI
   const [textbooks, setTextbooks] = useState<TextbookGrade[]>([]);
   const [expandedGrade, setExpandedGrade] = useState<string | null>(null);
@@ -98,12 +116,28 @@ export default function Home() {
   const loadHistory = async () => {
     try {
       const res = await fetch(`${API}/history`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { const d = await res.json(); setHistory(d.history || []); setShowHistory(true); }
+    } catch { }
+  };
+
+  const loadCollab = async () => {
+    try {
+      const res = await fetch(`${API}/collab/groups`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const d = await res.json();
-        setHistory(d.history || []);
-        setShowHistory(true);
+        setGroups(d.groups || []); setMyGroups(d.my_groups || []);
+        if (d.my_groups?.length > 0) setActiveGroup(d.my_groups[0]);
       }
     } catch { }
+  };
+
+  const loadGroupDetails = async (g: string) => {
+    setActiveGroup(g);
+    const [pr, tr] = await Promise.all([
+      fetch(`${API}/collab/groups/${encodeURIComponent(g)}/plans`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch(`${API}/collab/groups/${encodeURIComponent(g)}/tasks`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]);
+    setGroupPlans(pr.plans || []); setGroupTasks(tr.tasks || []);
   };
 
   const loadHistoryDetail = async (id: string, lesson: string) => {
@@ -162,6 +196,34 @@ export default function Home() {
     finally { setRevising(false); }
   }, [revisionInput, revisionHistory, lessonPlan, token]);
 
+  // Unit plan
+  const handleUnitPlan = async () => {
+    setLoadingUnit(true); setUnitPlan("");
+    try {
+      const res = await fetch(`${API}/unit-plan`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ grade, unit: "第六单元", semester }),
+      });
+      if (!res.ok) throw new Error("生成失败");
+      const d = await res.json(); setUnitPlan(d.unit_plan || "");
+    } catch (e: any) { setError(e.message); }
+    finally { setLoadingUnit(false); }
+  };
+
+  // Reflection
+  const handleReflect = async () => {
+    setLoadingReflect(true); setReflection("");
+    try {
+      const res = await fetch(`${API}/reflect`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ lesson, lesson_plan: lessonPlan }),
+      });
+      if (!res.ok) throw new Error("生成失败");
+      const d = await res.json(); setReflection(d.reflection || "");
+    } catch (e: any) { setError(e.message); }
+    finally { setLoadingReflect(false); }
+  };
+
   const selectLesson = useCallback((g: string, s: string, l: string) => { setGrade(g); setSemester(s); setLesson(l); }, []);
 
   const tabContent = () => {
@@ -213,6 +275,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={loadHistory} className="text-xs text-gray-500 hover:text-amber-700 px-2 py-1 rounded">📋 历史</button>
+            <button onClick={() => { setShowCollab(!showCollab); if (!showCollab) loadCollab(); }} className="text-xs text-gray-500 hover:text-blue-700 px-2 py-1 rounded">👥 教研</button>
             {(userRole === "admin" || userRole === "reviewer") && (
               <button onClick={async () => {
                 setShowAdmin(!showAdmin);
@@ -307,6 +370,10 @@ export default function Home() {
                   className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white font-medium px-4 py-1 rounded-lg text-sm transition-colors">
                   {loading ? "生成中..." : "生成"}
                 </button>
+                <button onClick={handleUnitPlan} disabled={loadingUnit}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium px-4 py-1 rounded-lg text-sm transition-colors">
+                  {loadingUnit ? "规划中..." : "单元规划"}
+                </button>
               </div>
               <textarea value={requirements} onChange={e => setRequirements(e.target.value)} placeholder="教学要求（可选）" rows={1}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none" />
@@ -331,30 +398,6 @@ export default function Home() {
                   <div className="prose prose-amber prose-sm max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{tabContent()}</ReactMarkdown>
                   </div>
-                </div>
-              </div>
-            )}
-
-            {/* Submit Review */}
-            {lessonPlan && lastPlanId && (
-              <div className="bg-white rounded-xl shadow-sm border border-green-100 p-4 mb-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-semibold text-green-800">✅ 提交校本审核</h3>
-                    <p className="text-xs text-gray-500">提交后教研组长将审核此教案，审核通过后存档为校本教案</p>
-                  </div>
-                  <button onClick={async () => {
-                    try {
-                      const res = await fetch(`${API}/review/submit`, {
-                        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                        body: JSON.stringify({ record_id: lastPlanId }),
-                      });
-                      if (res.ok) alert("已提交审核！");
-                      else alert("提交失败");
-                    } catch { alert("提交失败"); }
-                  }} className="bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-1.5 rounded-lg transition-colors">
-                    📤 提交审核
-                  </button>
                 </div>
               </div>
             )}
@@ -449,6 +492,108 @@ export default function Home() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Unit Plan */}
+            {unitPlan && (
+              <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-base font-bold text-blue-800">📐 单元整体规划</h2>
+                  <button onClick={() => setUnitPlan("")} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+                </div>
+                <div className="prose prose-sm max-w-none"><ReactMarkdown remarkPlugins={[remarkGfm]}>{unitPlan}</ReactMarkdown></div>
+              </div>
+            )}
+
+            {/* Collab Panel */}
+            {showCollab && (
+              <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-5 mb-4">
+                <h2 className="text-base font-bold text-blue-800 mb-3">👥 教研协作</h2>
+                <div className="flex gap-2 mb-3">
+                  <input value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="新教研组名称" className="border border-gray-300 rounded px-2 py-1 text-xs flex-1" />
+                  <button onClick={async () => {
+                    await fetch(`${API}/collab/groups/create`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ name: newGroupName }) });
+                    setNewGroupName(""); loadCollab();
+                  }} className="bg-blue-600 text-white text-xs px-3 py-1 rounded">创建</button>
+                </div>
+                {groups.length === 0 && <div className="text-xs text-gray-400">暂无教研组，创建一个吧</div>}
+                <div className="flex gap-1 flex-wrap mb-3">
+                  {groups.map((g: any) => (
+                    <button key={g.name} onClick={() => { loadGroupDetails(g.name); }}
+                      className={`text-xs px-2 py-1 rounded ${activeGroup === g.name ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-blue-50"}`}>
+                      {g.name} ({g.members?.length || 0}人)
+                    </button>
+                  ))}
+                  {!myGroups.includes(activeGroup) && activeGroup && (
+                    <button onClick={async () => {
+                      await fetch(`${API}/collab/groups/join`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ name: activeGroup }) });
+                      loadCollab();
+                    }} className="text-xs text-blue-600 underline">加入</button>
+                  )}
+                </div>
+                {activeGroup && (
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs font-semibold text-gray-600">共享教案 ({groupPlans.length})</span>
+                      <button onClick={async () => {
+                        await fetch(`${API}/collab/tasks/assign`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ group: activeGroup, assigned_to: username, lesson: lesson || "待定" }) });
+                        loadGroupDetails(activeGroup);
+                      }} className="text-xs text-blue-600 underline">分配备课任务</button>
+                    </div>
+                    {groupPlans.map((p: any, i: number) => (
+                      <div key={i} className="text-xs border-b border-gray-100 py-1">
+                        <span className="font-medium">{p.shared_by}</span> · 《{p.lesson}》{p.grade}
+                        <span className="text-gray-400 ml-2">{p.timestamp?.slice(0, 16)}</span>
+                        {p.comments?.map((c: any, j: number) => (
+                          <div key={j} className="ml-4 text-gray-500">{c.username}: {c.text}</div>
+                        ))}
+                        <div className="flex gap-1 mt-1">
+                          <input value={collabComment} onChange={e => setCollabComment(e.target.value)} placeholder="评论..." className="border border-gray-200 rounded px-1 py-0 text-xs flex-1" />
+                          <button onClick={async () => {
+                            await fetch(`${API}/collab/comment`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ group: activeGroup, plan_index: i, text: collabComment }) });
+                            setCollabComment(""); loadGroupDetails(activeGroup);
+                          }} className="text-xs bg-gray-200 px-1 rounded">发送</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Reflection */}
+            {reflection && (
+              <div className="bg-white rounded-xl shadow-sm border border-green-100 p-5 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-base font-bold text-green-800">📝 课后反思引导</h2>
+                  <button onClick={() => setReflection("")} className="text-xs text-gray-400">✕</button>
+                </div>
+                <div className="prose prose-sm max-w-none"><ReactMarkdown remarkPlugins={[remarkGfm]}>{reflection}</ReactMarkdown></div>
+              </div>
+            )}
+
+            {/* Submit Review */}
+            {lessonPlan && lastPlanId && (
+              <div className="bg-white rounded-xl shadow-sm border border-green-100 p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-green-800">✅ 提交校本审核</h3>
+                    <p className="text-xs text-gray-500">提交后教研组长将审核此教案</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={handleReflect} disabled={loadingReflect}
+                      className="bg-green-100 text-green-800 text-sm px-3 py-1 rounded hover:bg-green-200">
+                      {loadingReflect ? "生成中..." : "📝 课后反思"}
+                    </button>
+                    <button onClick={async () => {
+                      try {
+                        const res = await fetch(`${API}/review/submit`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ record_id: lastPlanId }) });
+                        if (res.ok) alert("已提交审核！"); else alert("提交失败");
+                      } catch { alert("提交失败"); }
+                    }} className="bg-green-600 text-white text-sm px-3 py-1 rounded hover:bg-green-700">📤 提交审核</button>
+                  </div>
+                </div>
               </div>
             )}
 

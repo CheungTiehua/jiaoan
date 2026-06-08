@@ -18,6 +18,8 @@ from prompts import (
     LESSON_PLAN_SYSTEM, LESSON_PLAN_USER,
     TEACHING_GUIDE_SYSTEM, TEACHING_GUIDE_USER,
     REVISE_SYSTEM, REVISE_USER,
+    UNIT_PLAN_SYSTEM, UNIT_PLAN_USER,
+    REFLECTION_SYSTEM, REFLECTION_USER,
 )
 from search_engine import search_hybrid, refresh_index
 from lesson_evidence import build_lesson_evidence, format_lesson_evidence
@@ -94,6 +96,19 @@ def generate_lesson(
         "lesson_plan": lesson_plan,
         "teaching_guide": teaching_guide,
     }
+
+
+def generate_unit_plan(grade: str, unit: str, semester: str = "上") -> str:
+    """生成单元整体规划"""
+    context, _ = retrieve_structured(f"{grade} {semester}册 {unit}", grade=grade)
+    prompt = UNIT_PLAN_USER.format(grade=grade, semester=semester, unit=unit, context=context)
+    return call_deepseek(UNIT_PLAN_SYSTEM, prompt, temperature=0.3)
+
+
+def generate_reflection(lesson: str, lesson_plan: str) -> str:
+    """生成课后反思引导"""
+    prompt = REFLECTION_USER.format(lesson=lesson, lesson_plan=lesson_plan)
+    return call_deepseek(REFLECTION_SYSTEM, prompt, temperature=0.4)
 
 
 def revise_lesson(current_plan: str, revision_request: str, history: str = "") -> str:
