@@ -13,6 +13,9 @@ __pycache__/
 # 向量数据库
 chroma_db/
 
+# 用户数据
+data/
+
 # IDE
 .idea/
 .vscode/
