@@ -6,7 +6,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, HTTPException, Header, Depends
+from fastapi import FastAPI, HTTPException, Header, Depends, Request
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -27,6 +28,9 @@ from collab import (
     share_plan, get_group_plans, assign_task, get_group_tasks,
     complete_task, add_comment,
 )
+from security import check_rate_limit
+from health import get_health
+from backup import create_backup, restore_backup
 
 app = FastAPI(
     title="LeKai教案知识库 API",
@@ -111,7 +115,10 @@ async def textbooks():
 # ---- Auth API ----
 
 @app.post("/api/register")
-async def register(req: AuthRequest):
+async def register(req: AuthRequest, request: Request = None):
+    client_ip = request.client.host if request else "127.0.0.1"
+    if check_rate_limit(f"reg_{client_ip}", 5, 300):
+        raise HTTPException(status_code=429, detail="注册过于频繁，请5分钟后再试")
     ok, msg = register_user(req.username, req.password)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
@@ -119,7 +126,10 @@ async def register(req: AuthRequest):
 
 
 @app.post("/api/login")
-async def login(req: AuthRequest):
+async def login(req: AuthRequest, request: Request = None):
+    client_ip = request.client.host if request else "127.0.0.1"
+    if check_rate_limit(f"login_{client_ip}", 10, 60):
+        raise HTTPException(status_code=429, detail="登录尝试过多，请1分钟后再试")
     token = login_user(req.username, req.password)
     if not token:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
@@ -349,6 +359,61 @@ async def reflect(req: ReflectionRequest, username: str = Depends(require_auth))
         return {"reflection": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+
+
+# ---- 健康检查 ----
+
+@app.get("/api/admin/health")
+async def admin_health(username: str = Depends(require_admin_or_reviewer)):
+    return get_health()
+
+
+# ---- 备份恢复 ----
+
+@app.post("/api/admin/backup")
+async def admin_backup(username: str = Depends(require_admin)):
+    buf = create_backup()
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    from fastapi.responses import StreamingResponse
+    return StreamingResponse(buf, media_type="application/zip",
+                            headers={"Content-Disposition": f"attachment; filename=lekai_backup_{ts}.zip"})
+
+
+@app.post("/api/admin/restore")
+async def admin_restore(username: str = Depends(require_admin)):
+    from fastapi import UploadFile, File
+    # 通过 request 获取上传文件
+    return {"error": "请使用 multipart/form-data 上传备份文件"}
+
+
+# ---- Prompt 在线配置 ----
+
+PROMPTS_FILE = Path(__file__).resolve().parent.parent / "data" / ".system_prompts"
+
+
+@app.get("/api/admin/prompts")
+async def admin_get_prompts(username: str = Depends(require_admin_or_reviewer)):
+    if PROMPTS_FILE.exists():
+        try:
+            return json.loads(PROMPTS_FILE.read_text())
+        except Exception:
+            pass
+    return {"chat_prompt": "", "audit_prompt": ""}
+
+
+@app.post("/api/admin/prompts")
+async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
+    import json as _json
+    cur = _json.loads(PROMPTS_FILE.read_text()) if PROMPTS_FILE.exists() else {}
+    for key in ("chat_prompt", "audit_prompt"):
+        if key in req:
+            cur[key] = str(req[key])[:5000]
+    PROMPTS_FILE.write_text(_json.dumps(cur, ensure_ascii=False, indent=2))
+    return {"ok": True, "message": "提示词已更新，立即生效"}
+
+
+import time as _time
+import json as _json
 
 
 if __name__ == "__main__":

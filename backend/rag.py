@@ -25,10 +25,41 @@ from search_engine import search_hybrid, refresh_index
 from lesson_evidence import build_lesson_evidence, format_lesson_evidence
 
 
+# Multi-Key 轮询
+import threading
+_key_counter = 0
+_key_lock = threading.Lock()
+_keys = [k.strip() for k in DEEPSEEK_API_KEY.split(",") if k.strip()] if DEEPSEEK_API_KEY else []
+
+
+def _get_api_key() -> str:
+    global _key_counter
+    with _key_lock:
+        if not _keys:
+            raise RuntimeError("请设置 DEEPSEEK_API_KEY")
+        k = _keys[_key_counter % len(_keys)]
+        _key_counter += 1
+        return k
+
+
+# 加载在线自定义 Prompt（管理员可修改）
+PROMPTS_FILE = Path(__file__).resolve().parent.parent / "data" / ".system_prompts"
+
+
+def _load_custom_prompt(key: str) -> str | None:
+    if PROMPTS_FILE.exists():
+        try:
+            import json
+            return json.loads(PROMPTS_FILE.read_text()).get(key)
+        except Exception:
+            pass
+    return None
+
+
 def call_deepseek(system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
-    if not DEEPSEEK_API_KEY:
+    if not _keys:
         raise RuntimeError("请设置 DEEPSEEK_API_KEY")
-    headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {_get_api_key()}", "Content-Type": "application/json"}
     payload = {"model": DEEPSEEK_MODEL, "messages": [
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
