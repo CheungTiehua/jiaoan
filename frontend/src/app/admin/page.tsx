@@ -117,6 +117,8 @@ export default function AdminPage() {
   };
 
 type Section = "dashboard" | "reviews" | "prompts" | "roles" | "feedback" | "chunks" | "health" | "backup";
+
+  const SECTIONS: { key: Section; label: string; icon: string }[] = [
     { key: "dashboard", label: "仪表盘", icon: "📊" },
     { key: "reviews", label: "审核队列", icon: "✅" },
     { key: "prompts", label: "提示词调优", icon: "🔧" },

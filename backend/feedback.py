@@ -22,7 +22,7 @@ def submit_feedback(
 ) -> dict:
     """提交教案反馈"""
     if not 1 <= rating <= 5:
-        rating = 0
+        rating = 0  # 0 = 跳过评分，仅记录标签/评论
 
     record = {
         "username": username,

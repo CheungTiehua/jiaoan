@@ -450,7 +450,7 @@ async def api_feedback(req: FeedbackRequest, username: str = Depends(require_aut
                            req.rating, req.useful_refs, req.tags, req.comment)
 
 @app.get("/api/feedback/{plan_id}")
-async def api_get_feedback(plan_id: str):
+async def api_get_feedback(plan_id: str, username: str = Depends(require_auth)):
     fb = get_feedback(plan_id)
     if not fb:
         raise HTTPException(status_code=404, detail="无反馈记录")
@@ -497,7 +497,7 @@ async def admin_chunks(username: str = Depends(require_admin_or_reviewer)):
         meta = result["metadatas"][i] if result.get("metadatas") and i < len(result["metadatas"]) else {}
         chunks.append({
             "id": result["ids"][i],
-            "text": result["documents"][i][:200] + "...",
+            "text": (t := result["documents"][i])[:200] + ("..." if len(t) > 200 else ""),
             "lesson": meta.get("lesson", ""),
             "grade": meta.get("grade", ""),
             "chunk_type": meta.get("chunk_type", ""),
