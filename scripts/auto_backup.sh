@@ -14,9 +14,7 @@ TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null)
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/lekai_backup_${TIMESTAMP}.zip"
 
-curl -s -o "$BACKUP_FILE" -H "Authorization: Bearer $TOKEN" http://localhost/api/admin/backup
-
-if [ -f "$BACKUP_FILE" ] && [ "$(stat -c%s "$BACKUP_FILE" 2>/dev/null || stat -f%z "$BACKUP_FILE")" -gt 100 ]; then
+if curl -sf -o "$BACKUP_FILE" -H "Authorization: Bearer $TOKEN" http://localhost/api/admin/backup; then
     echo "备份成功: $BACKUP_FILE"
 else
     echo "备份失败"

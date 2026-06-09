@@ -568,7 +568,14 @@ async def evaluate_plan(file: UploadFile = FastAPIFile(...), username: str = Dep
     if ext not in (".md", ".txt", ".docx"):
         raise HTTPException(status_code=400, detail="仅支持 .md / .txt / .docx 格式")
 
-    content = (await file.read()).decode("utf-8", errors="ignore")
+    # 解析文档内容（docx 用 python-docx 提取，md/txt 直接读）
+    if ext == ".docx":
+        from docx import Document as DocxDoc
+        doc = DocxDoc(io.BytesIO(await file.read()))
+        content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    else:
+        content = (await file.read()).decode("utf-8", errors="ignore")
+
     if len(content) < 200:
         raise HTTPException(status_code=400, detail="教案内容过短，至少200字符")
 
@@ -668,7 +675,14 @@ async def admin_upload_lesson(
     if ext not in (".md", ".txt", ".docx"):
         raise HTTPException(status_code=400, detail="仅支持 .md / .txt / .docx 格式")
 
-    content = (await file.read()).decode("utf-8", errors="ignore")
+    # 解析文档内容
+    if ext == ".docx":
+        from docx import Document as DocxDoc
+        doc = DocxDoc(io.BytesIO(await file.read()))
+        content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    else:
+        content = (await file.read()).decode("utf-8", errors="ignore")
+
     if len(content) < 100:
         raise HTTPException(status_code=400, detail="文档内容过短（至少100字符）")
 

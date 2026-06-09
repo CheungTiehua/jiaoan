@@ -207,8 +207,8 @@ if os.path.exists(tf):
     save_sessions(sessions)
 "
 
-# cron: 每天凌晨 3 点备份
-(crontab -u root -l 2>/dev/null; echo "0 3 * * * bash $APP_DIR/scripts/auto_backup.sh >> $APP_DIR/logs/backup.log 2>&1") | crontab -u root -
+# cron: 每天凌晨 3 点备份（去重）
+(crontab -u root -l 2>/dev/null | grep -v "auto_backup.sh"; echo "0 3 * * * bash $APP_DIR/scripts/auto_backup.sh >> $APP_DIR/logs/backup.log 2>&1") | crontab -u root -
 
 # 挂载点提示
 echo "提示: 请将第二块 SSD 挂载到 /mnt/backup"
