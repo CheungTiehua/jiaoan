@@ -13,8 +13,6 @@ services:
       - ./knowledge-base:/app/knowledge-base
       - chroma_data:/app/chroma_db
       - model_cache:/app/.cache
-    depends_on:
-      - chromadb
     restart: unless-stopped
 
   # Next.js 前端
