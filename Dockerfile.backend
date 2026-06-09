@@ -14,8 +14,9 @@ COPY scripts/ingest_knowledge.py ./scripts/
 # 复制知识库（如存在）
 COPY knowledge-base/ ./knowledge-base/
 
-# 预下载 Embedding 模型（可选，加速启动）
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-zh-v1.5', cache_folder='/app/.cache/models')"
+# 预下载 Embedding 模型到镜像内置路径（不受 volume 挂载影响）
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-zh-v1.5', cache_folder='/app/.cache/models')" && \
+    cp -r /app/.cache/models /app/.cache/models_builtin
 
 ENV DEEPSEEK_API_KEY=""
 ENV DEEPSEEK_BASE_URL="https://api.deepseek.com"

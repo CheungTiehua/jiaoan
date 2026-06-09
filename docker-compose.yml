@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # FastAPI 后端（ChromaDB 使用嵌入式 PersistentClient）
   backend:
     build:
       context: .
@@ -15,21 +14,41 @@ services:
       - chroma_data:/app/chroma_db
       - model_cache:/app/.cache
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    mem_limit: 1g
+    cpus: 1.0
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Next.js 前端
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
       args:
         NEXT_PUBLIC_API_URL: /api
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    mem_limit: 256m
+    cpus: 0.5
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
-  # Nginx 反向代理
   nginx:
     image: nginx:alpine
     ports:
@@ -40,6 +59,18 @@ services:
       - frontend
       - backend
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    mem_limit: 64m
+    cpus: 0.25
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   chroma_data:

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 
-const API = "/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function AdminPage() {
   const [token, setToken] = useState("");

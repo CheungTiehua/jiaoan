@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const API = "/api";
+const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 type Tab = "exam" | "peer" | "plan" | "guide";
 
