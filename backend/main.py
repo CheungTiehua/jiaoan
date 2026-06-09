@@ -9,7 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, HTTPException, Header, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -99,6 +99,10 @@ class ReviseResponse(BaseModel):
 
 
 # ---- Public API ----
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="http://localhost:3000")
 
 @app.get("/api/health")
 async def health():
