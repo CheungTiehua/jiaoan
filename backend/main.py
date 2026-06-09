@@ -482,6 +482,43 @@ async def admin_annotation_stats(username: str = Depends(require_admin_or_review
     return get_annotation_stats()
 
 
+# ---- 知识库 Chunk 管理 ----
+
+@app.get("/api/admin/chunks")
+async def admin_chunks(username: str = Depends(require_admin_or_reviewer)):
+    """浏览知识库 chunks"""
+    from search_engine import get_collection
+    col = get_collection()
+    if col.count() == 0:
+        return {"chunks": [], "total": 0}
+    result = col.get(include=["documents", "metadatas"], limit=200)
+    chunks = []
+    for i in range(min(len(result["ids"]), len(result.get("documents", [])))):
+        meta = result["metadatas"][i] if result.get("metadatas") and i < len(result["metadatas"]) else {}
+        chunks.append({
+            "id": result["ids"][i],
+            "text": result["documents"][i][:200] + "...",
+            "lesson": meta.get("lesson", ""),
+            "grade": meta.get("grade", ""),
+            "chunk_type": meta.get("chunk_type", ""),
+        })
+    return {"chunks": chunks, "total": col.count()}
+
+
+@app.post("/api/admin/chunks/delete")
+async def admin_delete_chunk(req: dict, username: str = Depends(require_admin)):
+    """删除单个 chunk"""
+    chunk_id = req.get("chunk_id", "")
+    if not chunk_id:
+        raise HTTPException(status_code=400, detail="请提供 chunk_id")
+    from search_engine import get_collection
+    col = get_collection()
+    col.delete(ids=[chunk_id])
+    from search_engine import refresh_index
+    refresh_index()
+    return {"ok": True, "message": "已删除并刷新索引"}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

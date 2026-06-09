@@ -4,8 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 
 const API = "/api";
 
-type Section = "dashboard" | "reviews" | "prompts" | "roles" | "health" | "backup";
-
 export default function AdminPage() {
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
@@ -23,6 +21,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedRole, setSelectedRole] = useState("teacher");
+  // Chunks
+  const [chunks, setChunks] = useState<any[]>([]);
   // Feedback
   const [feedbackStats, setFeedbackStats] = useState<any>(null);
   // Health
@@ -72,6 +72,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!token) return;
     if (section === "dashboard" || section === "reviews") loadDashboard();
+    if (section === "chunks") fetch(`${API}/admin/chunks`, { headers }).then(r => r.json()).then(d => setChunks(d.chunks || []));
     if (section === "feedback") fetch(`${API}/admin/feedback-stats`, { headers }).then(r => r.json()).then(setFeedbackStats);
     if (section === "health") loadHealth();
     if (section === "prompts") loadPrompts();
@@ -115,11 +116,12 @@ export default function AdminPage() {
     } catch { console.error("admin API failed"); alert("网络错误，请重试"); }
   };
 
-  const SECTIONS: { key: Section; label: string; icon: string }[] = [
+type Section = "dashboard" | "reviews" | "prompts" | "roles" | "feedback" | "chunks" | "health" | "backup";
     { key: "dashboard", label: "仪表盘", icon: "📊" },
     { key: "reviews", label: "审核队列", icon: "✅" },
     { key: "prompts", label: "提示词调优", icon: "🔧" },
     { key: "roles", label: "角色管理", icon: "👥" },
+    { key: "chunks", label: "知识库Chunk", icon: "📦" },
     { key: "feedback", label: "反馈统计", icon: "⭐" },
     { key: "health", label: "系统健康", icon: "🩺" },
     { key: "backup", label: "备份恢复", icon: "💾" },
@@ -358,6 +360,22 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Chunks */}
+          {section === "chunks" && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">📦 知识库 Chunk ({chunks.length})</h2>
+              {chunks.map((c: any) => (
+                <div key={c.id} className="bg-white rounded-lg border p-3 mb-1 text-xs">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium">{c.lesson || "—"}</span>
+                    <span className="text-gray-400">{c.grade} · {c.chunk_type}</span>
+                  </div>
+                  <p className="text-gray-500 truncate">{c.text}</p>
+                </div>
+              ))}
             </div>
           )}
 

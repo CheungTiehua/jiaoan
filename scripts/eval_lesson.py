@@ -40,22 +40,29 @@ def run():
         peer = result.get("peer_analysis", "")
         checks_kw = q.get("check", [])
 
-        # 评分
-        has_plan = len(plan) > 500
-        has_guide = len(guide) > 500
-        has_exam = len(exam) > 200
-        has_peer = len(peer) > 200
+        # 四维结构化评分
+        sections = ["教材分析","学情分析","教学目标","教学重难点","教学准备","教学过程","板书设计","作业布置"]
+        completeness = sum(1 for s in sections if s in plan) / len(sections)  # 0-1
+        has_3d_goals = all(k in plan for k in ["知识与能力","过程与方法","情感态度"])
+        goal_quality = 1.0 if has_3d_goals else 0.3  # 0-1
+        has_time = sum(1 for _ in ["X分钟","钟）","分钟"] if _ in plan) > 0
+        operability = 1.0 if has_time else 0.4  # 0-1
         kw_hits = sum(1 for kw in checks_kw if kw in plan)
-        kw_rate = kw_hits / len(checks_kw) if checks_kw else 1.0
+        coverage = kw_hits / len(checks_kw) if checks_kw else 1.0  # 0-1
 
-        passed = has_plan and has_guide and has_exam and has_peer and kw_rate >= 0.5
-        status = "✅" if passed else "⚠️" if has_plan else "❌"
+        scores = {
+            "completeness": round(completeness * 100),   # 教案完整性
+            "goal_quality": round(goal_quality * 100),    # 目标质量
+            "operability": round(operability * 100),       # 可操作性
+            "coverage": round(coverage * 100),             # 考点覆盖
+            "overall": round((completeness + goal_quality + operability + coverage) / 4 * 100),
+        }
+        passed = scores["overall"] >= 60
+        status = "✅" if passed else "⚠️"
 
         r = {
             "id": q["id"], "category": q["category"], "status": status,
-            "lesson": q["lesson"], "plan_len": len(plan), "guide_len": len(guide),
-            "exam_len": len(exam), "peer_len": len(peer),
-            "kw_hit": f"{kw_hits}/{len(checks_kw)}", "elapsed_ms": elapsed,
+            "lesson": q["lesson"], "scores": scores, "elapsed_ms": elapsed,
         }
         results.append(r)
         cat = q["category"]
@@ -66,8 +73,9 @@ def run():
             by_cat[cat]["pass"] += 1
 
         print(f"  {status} {q['id']} [{q['category']:5s}] 《{q['lesson']}》 "
-              f"plan={len(plan)}c exam={len(exam)}c peer={len(peer)}c "
-              f"kw={kw_hits}/{len(checks_kw)} {elapsed}ms")
+              f"完整:{scores['completeness']} 目标:{scores['goal_quality']} "
+              f"操作:{scores['operability']} 覆盖:{scores['coverage']} "
+              f"综合:{scores['overall']} {elapsed}ms")
 
     # 汇总
     total = len(results)
