@@ -137,13 +137,15 @@ async def setup_complete(req: dict):
         existing = "\n".join(l for l in lines if not l.startswith("DEEPSEEK_API_KEY=") and l.strip())
         if existing:
             existing += "\n"
-    env_file.write_text(existing + f"DEEPSEEK_API_KEY={api_key}\n")
-    env_file.chmod(0o600)
+    from security import atomic_write
+    atomic_write(env_file, (existing + f"DEEPSEEK_API_KEY={api_key}\n").encode())
+    import os as _os2
+    _os2.chmod(env_file, 0o600)
 
     import json as _j
     key_file = Path(__file__).resolve().parent.parent / "data" / "api_key.json"
-    key_file.write_text(_j.dumps({"api_key": api_key}))
-    key_file.chmod(0o600)
+    atomic_write(key_file, _j.dumps({"api_key": api_key}).encode())
+    _os2.chmod(key_file, 0o600)
 
     ok, msg = register_user("admin", password)
     if not ok:

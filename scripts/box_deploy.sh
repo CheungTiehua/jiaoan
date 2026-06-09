@@ -80,9 +80,9 @@ ExecStart=$APP_DIR/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port $B
 Restart=always
 RestartSec=5
 NoNewPrivileges=yes
-ProtectSystem=strict
+ProtectSystem=full
 ProtectHome=yes
-ReadWritePaths=$APP_DIR/data $APP_DIR/chroma_db $APP_DIR/logs
+ReadWritePaths=$APP_DIR/data $APP_DIR/chroma_db $APP_DIR/logs $APP_DIR/knowledge-base
 
 [Install]
 WantedBy=multi-user.target
