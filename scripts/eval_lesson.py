@@ -47,7 +47,8 @@ def run():
         completeness = sum(1 for s in sections if s in plan) / len(sections)  # 0-1
         has_3d_goals = all(k in plan for k in ["知识与能力","过程与方法","情感态度"])
         goal_quality = 1.0 if has_3d_goals else 0.3  # 0-1
-        has_time = sum(1 for _ in ["X分钟","钟）","分钟"] if _ in plan) > 0
+        import re
+        has_time = bool(re.search(r'\d+分钟', plan))  # 匹配"5分钟"而非占位符"X分钟"
         operability = 1.0 if has_time else 0.4  # 0-1
         kw_hits = sum(1 for kw in checks_kw if kw in plan)
         coverage = kw_hits / len(checks_kw) if checks_kw else 1.0  # 0-1

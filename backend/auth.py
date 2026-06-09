@@ -92,6 +92,8 @@ def register_user(username: str, password: str) -> tuple[bool, str]:
     username = username.strip()
     if not username or len(username) < 2:
         return False, "用户名至少2个字符"
+    if not username.replace("_", "").replace("-", "").isalnum():
+        return False, "用户名只能包含字母、数字、下划线和连字符"
     if not password or len(password) < 4:
         return False, "密码至少4个字符"
 
