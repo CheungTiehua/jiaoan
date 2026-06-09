@@ -50,7 +50,8 @@ def create_backup() -> io.BytesIO:
             zf.writestr("config.env.example", masked)
         # 元信息
         zf.writestr("backup_meta.json", json.dumps({
-            "version": "0.7", "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "version": __import__("config").VERSION if hasattr(__import__("config"), "VERSION") else "1.0.0",
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }, ensure_ascii=False, indent=2))
     buf.seek(0)
     return buf
@@ -69,6 +70,10 @@ def restore_backup(file_data: bytes) -> tuple[bool, str]:
                     continue
                 dest = (PROJECT_ROOT / info.filename).resolve()
                 if not str(dest).startswith(str(PROJECT_ROOT.resolve())):
+                    continue
+                # 白名单：仅允许恢复 data/、knowledge-base/、chroma_db/ 三个目录
+                rel = str(dest.relative_to(PROJECT_ROOT))
+                if not any(rel.startswith(p) for p in ("data/", "knowledge-base/", "chroma_db/")):
                     continue
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 with zf.open(info) as src:

@@ -95,13 +95,26 @@ def call_deepseek(system_prompt: str, user_prompt: str, temperature: float = 0.3
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt}
     ], "temperature": temperature, "max_tokens": 4096}
-    resp = requests.post(f"{DEEPSEEK_BASE_URL}/v1/chat/completions", headers=headers, json=payload, timeout=180)
+    try:
+        resp = requests.post(f"{DEEPSEEK_BASE_URL}/v1/chat/completions", headers=headers, json=payload, timeout=180)
+    except requests.Timeout:
+        raise RuntimeError("请求超时，请检查网络连接")
+    except requests.ConnectionError:
+        raise RuntimeError("无法连接到 DeepSeek 服务，请检查网络")
+
     if resp.status_code == 429:
         raise RuntimeError("API 请求过于频繁，请稍后重试")
     if resp.status_code == 401 or resp.status_code == 403:
         raise RuntimeError("API Key 无效或已过期")
+    if resp.status_code == 402:
+        raise RuntimeError("API 余额不足，请充值后重试")
+    if resp.status_code >= 500:
+        raise RuntimeError("DeepSeek 服务异常，请稍后重试")
     resp.raise_for_status()
-    return resp.json()["choices"][0]["message"]["content"]
+    try:
+        return resp.json()["choices"][0]["message"]["content"]
+    except (KeyError, IndexError):
+        raise RuntimeError("AI 返回数据异常，请稍后重试")
 
 
 def retrieve_structured(query: str, grade: str | None = None,

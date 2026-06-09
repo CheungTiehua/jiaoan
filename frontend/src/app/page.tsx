@@ -16,7 +16,6 @@ export default function Home() {
   const [token, setToken] = useState<string>("");
   const [username, setUsername] = useState<string>("");
   const [userRole, setUserRole] = useState<string>("");
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authUser, setAuthUser] = useState("");
   const [authPass, setAuthPass] = useState("");
   const [authError, setAuthError] = useState("");
@@ -106,23 +105,17 @@ export default function Home() {
   // Auth handlers
   const doAuth = async () => {
     setAuthError("");
-    const ep = authMode === "login" ? "login" : "register";
     try {
-      const res = await fetch(`${API}/${ep}`, {
+      const res = await fetch(`${API}/login`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: authUser, password: authPass }),
       });
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || "操作失败");
-      if (authMode === "login") {
-        setToken(d.token);
-        setUsername(authUser);
-        setUserRole(d.role || "teacher");
-        localStorage.setItem("lekai_token", d.token);
-      } else {
-        setAuthMode("login");
-        setAuthError("注册成功，请登录");
-      }
+      setToken(d.token);
+    setUsername(authUser);
+    setUserRole(d.role || "teacher");
+    localStorage.setItem("lekai_token", d.token);
     } catch (e: any) { setAuthError(e.message); }
   };
 
@@ -368,7 +361,7 @@ export default function Home() {
             onKeyDown={e => e.key === "Enter" && doAuth()}
             placeholder="密码" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:ring-2 focus:ring-amber-400 outline-none" />
           <button onClick={doAuth} className="w-full bg-amber-600 hover:bg-amber-700 text-white font-medium py-2 rounded-lg text-sm mb-3 transition-colors">
-            {authMode === "login" ? "登录" : "注册"}
+            登录
           </button>
           {authError && <div className="text-sm text-red-600 text-center mb-3">{authError}</div>}
           <p className="text-xs text-gray-400 text-center">账号由管理员创建，请联系教研组长</p>
