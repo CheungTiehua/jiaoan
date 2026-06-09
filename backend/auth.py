@@ -52,7 +52,8 @@ def load_users() -> dict:
 
 
 def save_users(users: dict):
-    USERS_FILE.write_text(json.dumps(users, ensure_ascii=False, indent=2))
+    from security import atomic_write
+    atomic_write(USERS_FILE, json.dumps(users, ensure_ascii=False, indent=2).encode())
     USERS_FILE.chmod(0o600)
 
 
@@ -66,10 +67,10 @@ def load_sessions() -> dict:
 
 
 def save_sessions(sessions: dict):
-    # 清理过期 session（7天）
+    from security import atomic_write
     now = time.time()
     sessions = {k: v for k, v in sessions.items() if v.get("expires_at", 0) > now}
-    SESSIONS_FILE.write_text(json.dumps(sessions, ensure_ascii=False, indent=2))
+    atomic_write(SESSIONS_FILE, json.dumps(sessions, ensure_ascii=False, indent=2).encode())
 
 
 def register_user(username: str, password: str) -> tuple[bool, str]:
@@ -176,7 +177,8 @@ def save_history(username: str, grade: str, lesson: str, plan: dict) -> str:
         "lesson_plan": plan.get("lesson_plan", ""),
         "teaching_guide": plan.get("teaching_guide", ""),
     }
-    filepath.write_text(json.dumps(record, ensure_ascii=False, indent=2))
+    from security import atomic_write
+    atomic_write(filepath, json.dumps(record, ensure_ascii=False, indent=2).encode())
     return str(ts)
 
 

@@ -373,9 +373,9 @@ async def admin_health(username: str = Depends(require_admin_or_reviewer)):
 
 @app.post("/api/admin/backup")
 async def admin_backup(username: str = Depends(require_admin)):
+    import time as _t
     buf = create_backup()
-    ts = time.strftime("%Y%m%d_%H%M%S")
-    from fastapi.responses import StreamingResponse
+    ts = _t.strftime("%Y%m%d_%H%M%S")
     return StreamingResponse(buf, media_type="application/zip",
                             headers={"Content-Disposition": f"attachment; filename=lekai_backup_{ts}.zip"})
 

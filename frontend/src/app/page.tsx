@@ -24,6 +24,7 @@ export default function Home() {
   const [lastPlanId, setLastPlanId] = useState<string>("");
 
   // Unit plan
+  const [unitName, setUnitName] = useState("");
   const [unitPlan, setUnitPlan] = useState("");
   const [loadingUnit, setLoadingUnit] = useState(false);
 
@@ -140,7 +141,7 @@ export default function Home() {
 
   const loadHistoryDetail = async (id: string, lesson: string) => {
     try {
-      const res = await fetch(`${API}/history/${id}`);
+      const res = await fetch(`${API}/history/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const d = await res.json();
         setLesson(lesson);
@@ -200,7 +201,7 @@ export default function Home() {
     try {
       const res = await fetch(`${API}/unit-plan`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ grade, unit: "第六单元", semester }),
+        body: JSON.stringify({ grade, unit: unitName || "第一单元", semester }),
       });
       if (!res.ok) throw new Error("生成失败");
       const d = await res.json(); setUnitPlan(d.unit_plan || "");
@@ -357,6 +358,8 @@ export default function Home() {
                   className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white font-medium px-4 py-1 rounded-lg text-sm transition-colors">
                   {loading ? "生成中..." : "生成"}
                 </button>
+                <input type="text" value={unitName} onChange={e => setUnitName(e.target.value)}
+                  placeholder="单元名" className="border border-gray-300 rounded-lg px-2 py-1 text-sm w-28" />
                 <button onClick={handleUnitPlan} disabled={loadingUnit}
                   className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium px-4 py-1 rounded-lg text-sm transition-colors">
                   {loadingUnit ? "规划中..." : "单元规划"}

@@ -12,61 +12,58 @@ COLLAB_DIR = PROJECT_ROOT / "data" / "collab"
 GROUPS_FILE = COLLAB_DIR / "groups.json"
 COLLAB_DIR.mkdir(parents=True, exist_ok=True)
 
-_lock_fd = None
+_lock_file = COLLAB_DIR / ".lock"
 
 
-def _acquire_lock():
-    global _lock_fd
-    lock_file = COLLAB_DIR / ".lock"
-    _lock_fd = open(lock_file, "w")
-    fcntl.flock(_lock_fd, fcntl.LOCK_EX)
+class _GroupsCtx:
+    """上下文管理器：加锁→读→返回可修改dict→退出时写→解锁"""
+    def __init__(self):
+        self.fd = None
+        self.data = {}
 
+    def __enter__(self):
+        self.fd = open(_lock_file, "w")
+        fcntl.flock(self.fd, fcntl.LOCK_EX)
+        if GROUPS_FILE.exists():
+            try:
+                self.data = json.loads(GROUPS_FILE.read_text())
+            except json.JSONDecodeError:
+                self.data = {}
+        return self.data
 
-def _release_lock():
-    global _lock_fd
-    if _lock_fd:
-        fcntl.flock(_lock_fd, fcntl.LOCK_UN)
-        _lock_fd.close()
-        _lock_fd = None
+    def __exit__(self, *args):
+        try:
+            from security import atomic_write
+            atomic_write(GROUPS_FILE, json.dumps(self.data, ensure_ascii=False, indent=2).encode())
+        finally:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            self.fd.close()
 
 
 def _load_groups() -> dict:
-    _acquire_lock()
-    try:
-        if GROUPS_FILE.exists():
-            try:
-                return json.loads(GROUPS_FILE.read_text())
-            except json.JSONDecodeError:
-                pass
-        return {}
-    finally:
-        _release_lock()
+    """仅读取（不修改），短期持锁"""
+    with _GroupsCtx() as data:
+        return data.copy()
 
 
-def _save_groups(data: dict):
-    _acquire_lock()
-    try:
-        from security import atomic_write
-        atomic_write(GROUPS_FILE, json.dumps(data, ensure_ascii=False, indent=2).encode())
-    finally:
-        _release_lock()
+def _atomic_update(mutate_fn) -> dict:
+    """原子读-改-写：加锁→读→调用mutate_fn修改→写→解锁"""
+    with _GroupsCtx() as data:
+        result = mutate_fn(data)
+        return result if result is not None else {}
 
 
 # ---- 教研组管理 ----
 
 def create_group(name: str, creator: str) -> dict:
-    groups = _load_groups()
-    if name in groups:
-        return {"ok": False, "msg": "教研组已存在"}
-    groups[name] = {
-        "creator": creator,
-        "members": [creator],
-        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "shared_plans": [],  # [{shared_by, lesson, record_id, timestamp}]
-        "tasks": [],  # [{assigned_to, lesson, status, timestamp}]
-    }
-    _save_groups(groups)
-    return {"ok": True, "msg": f"教研组「{name}」创建成功"}
+    def _mut(data):
+        if name in data:
+            return {"ok": False, "msg": "教研组已存在"}
+        data[name] = {"creator": creator, "members": [creator],
+                      "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                      "shared_plans": [], "tasks": []}
+        return {"ok": True, "msg": f"教研组「{name}」创建成功"}
+    return _atomic_update(_mut)
 
 
 def list_groups() -> list:
@@ -76,14 +73,14 @@ def list_groups() -> list:
 
 
 def join_group(name: str, username: str) -> dict:
-    groups = _load_groups()
-    if name not in groups:
-        return {"ok": False, "msg": "教研组不存在"}
-    if username in groups[name].get("members", []):
-        return {"ok": False, "msg": "已在教研组中"}
-    groups[name].setdefault("members", []).append(username)
-    _save_groups(groups)
-    return {"ok": True, "msg": f"已加入「{name}」"}
+    def _mut(data):
+        if name not in data:
+            return {"ok": False, "msg": "教研组不存在"}
+        if username in data[name].get("members", []):
+            return {"ok": False, "msg": "已在教研组中"}
+        data[name].setdefault("members", []).append(username)
+        return {"ok": True, "msg": f"已加入「{name}」"}
+    return _atomic_update(_mut)
 
 
 def get_user_groups(username: str) -> list:
@@ -94,20 +91,16 @@ def get_user_groups(username: str) -> list:
 # ---- 共享教案 ----
 
 def share_plan(username: str, group_name: str, grade: str, lesson: str, record_id: str) -> dict:
-    groups = _load_groups()
-    if group_name not in groups:
-        return {"ok": False, "msg": "教研组不存在"}
-    g = groups[group_name]
-    g.setdefault("shared_plans", []).append({
-        "shared_by": username,
-        "grade": grade,
-        "lesson": lesson,
-        "record_id": record_id,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "comments": [],  # [{username, text, timestamp}]
-    })
-    _save_groups(groups)
-    return {"ok": True, "msg": "已分享到教研组"}
+    def _mut(data):
+        if group_name not in data:
+            return {"ok": False, "msg": "教研组不存在"}
+        data[group_name].setdefault("shared_plans", []).append({
+            "shared_by": username, "grade": grade, "lesson": lesson,
+            "record_id": record_id, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "comments": [],
+        })
+        return {"ok": True, "msg": "已分享到教研组"}
+    return _atomic_update(_mut)
 
 
 def get_group_plans(group_name: str) -> list:
@@ -120,19 +113,15 @@ def get_group_plans(group_name: str) -> list:
 # ---- 集体备课任务 ----
 
 def assign_task(group_name: str, assigned_to: str, lesson: str, requester: str) -> dict:
-    groups = _load_groups()
-    if group_name not in groups:
-        return {"ok": False, "msg": "教研组不存在"}
-    g = groups[group_name]
-    g.setdefault("tasks", []).append({
-        "assigned_to": assigned_to,
-        "lesson": lesson,
-        "status": "pending",
-        "requester": requester,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-    })
-    _save_groups(groups)
-    return {"ok": True, "msg": f"已分配任务给 {assigned_to}"}
+    def _mut(data):
+        if group_name not in data:
+            return {"ok": False, "msg": "教研组不存在"}
+        data[group_name].setdefault("tasks", []).append({
+            "assigned_to": assigned_to, "lesson": lesson, "status": "pending",
+            "requester": requester, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        return {"ok": True, "msg": f"已分配任务给 {assigned_to}"}
+    return _atomic_update(_mut)
 
 
 def get_group_tasks(group_name: str) -> list:
@@ -143,30 +132,29 @@ def get_group_tasks(group_name: str) -> list:
 
 
 def complete_task(group_name: str, task_index: int) -> dict:
-    groups = _load_groups()
-    if group_name not in groups:
-        return {"ok": False, "msg": "教研组不存在"}
-    tasks = groups[group_name].get("tasks", [])
-    if task_index >= len(tasks):
-        return {"ok": False, "msg": "任务不存在"}
-    tasks[task_index]["status"] = "done"
-    _save_groups(groups)
-    return {"ok": True, "msg": "任务已完成"}
+    def _mut(data):
+        if group_name not in data:
+            return {"ok": False, "msg": "教研组不存在"}
+        tasks = data[group_name].get("tasks", [])
+        if task_index < 0 or task_index >= len(tasks):
+            return {"ok": False, "msg": "任务不存在"}
+        tasks[task_index]["status"] = "done"
+        return {"ok": True, "msg": "任务已完成"}
+    return _atomic_update(_mut)
 
 
 # ---- 评论 ----
 
 def add_comment(group_name: str, plan_index: int, username: str, text: str) -> dict:
-    groups = _load_groups()
-    if group_name not in groups:
-        return {"ok": False, "msg": "教研组不存在"}
-    plans = groups[group_name].get("shared_plans", [])
-    if plan_index >= len(plans):
-        return {"ok": False, "msg": "教案不存在"}
-    plans[plan_index].setdefault("comments", []).append({
-        "username": username,
-        "text": text,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-    })
-    _save_groups(groups)
-    return {"ok": True, "msg": "评论已添加"}
+    def _mut(data):
+        if group_name not in data:
+            return {"ok": False, "msg": "教研组不存在"}
+        plans = data[group_name].get("shared_plans", [])
+        if plan_index < 0 or plan_index >= len(plans):
+            return {"ok": False, "msg": "教案不存在"}
+        plans[plan_index].setdefault("comments", []).append({
+            "username": username, "text": text,
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        return {"ok": True, "msg": "评论已添加"}
+    return _atomic_update(_mut)

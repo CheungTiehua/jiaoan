@@ -91,6 +91,7 @@ export default function AdminPage() {
       const a = document.createElement("a");
       a.href = url; a.download = `lekai_backup_${new Date().toISOString().slice(0, 10)}.zip`;
       a.click();
+      URL.revokeObjectURL(url);
     }
   };
 

@@ -3,6 +3,7 @@ LeKai 管理端 API — 校长仪表盘 + 教研组长审核流程
 """
 
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Optional
@@ -11,6 +12,9 @@ from auth import (
     HISTORY_DIR, load_users, save_users,
     get_user_role, list_users, get_history, get_history_detail,
 )
+from security import atomic_write
+
+_log = logging.getLogger("lekai")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 REVIEWS_DIR = HISTORY_DIR.parent / "reviews"
@@ -41,7 +45,7 @@ def submit_for_review(username: str, record_id: str) -> bool:
         "teaching_guide": detail.get("teaching_guide", "")[:1000],
     }
     filepath = REVIEWS_DIR / f"{record_id}.json"
-    filepath.write_text(json.dumps(review, ensure_ascii=False, indent=2))
+    atomic_write(filepath, json.dumps(review, ensure_ascii=False, indent=2).encode())
     return True
 
 
@@ -55,7 +59,7 @@ def get_review_queue() -> list[dict]:
             data.pop("teaching_guide", None)
             queue.append(data)
         except Exception:
-            pass
+            _log.warning("解析审核记录失败: %s", f.name)
     return queue
 
 
@@ -67,6 +71,7 @@ def get_review_detail(record_id: str) -> Optional[dict]:
     try:
         return json.loads(filepath.read_text())
     except Exception:
+        _log.warning("读取审核详情失败: %s", filepath.name)
         return None
 
 
@@ -81,9 +86,10 @@ def approve_review(record_id: str, reviewer: str, comment: str = "") -> bool:
         data["reviewer"] = reviewer
         data["review_time"] = time.strftime("%Y-%m-%d %H:%M:%S")
         data["comment"] = comment
-        filepath.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
         return True
     except Exception:
+        _log.warning("审核操作失败: %s", filepath.name)
         return False
 
 
@@ -98,9 +104,10 @@ def reject_review(record_id: str, reviewer: str, comment: str) -> bool:
         data["reviewer"] = reviewer
         data["review_time"] = time.strftime("%Y-%m-%d %H:%M:%S")
         data["comment"] = comment
-        filepath.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
         return True
     except Exception:
+        _log.warning("审核操作失败: %s", filepath.name)
         return False
 
 
