@@ -28,7 +28,7 @@ def create_backup() -> io.BytesIO:
         # 用户数据
         users_file = DATA_DIR / "users.json"
         if users_file.exists():
-            zf.write(users_file, "users.json")
+            zf.write(users_file, "data/users.json")
         # 知识库教案
         kb = PROJECT_ROOT / "knowledge-base"
         if kb.exists():

@@ -197,7 +197,7 @@ async def health():
     return {"status": "ok", "version": VERSION}
 
 @app.get("/api/health/deep")
-async def health_deep():
+async def health_deep(username: str = Depends(require_admin_or_reviewer)):
     """深度健康检查：验证API Key、Embedding模型、知识库"""
     try:
         from rag import call_deepseek
@@ -300,7 +300,7 @@ async def generate(req: GenerateRequest, request: Request, username: str = Depen
         result["record_id"] = record_id
         return GenerateResponse(**result)
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail="API Key 未配置")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception:
         import traceback, logging
         logging.getLogger("lekai").error("生成失败:\n%s", traceback.format_exc())
@@ -314,8 +314,8 @@ async def revise(req: ReviseRequest, username: str = Depends(require_auth)):
     try:
         new_plan = revise_lesson(req.current_plan, req.revision_request, req.history)
         return ReviseResponse(lesson_plan=new_plan)
-    except RuntimeError:
-        raise HTTPException(status_code=500, detail="API Key 未配置")
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception:
         import traceback, logging
         logging.getLogger("lekai").error("修改失败:\n%s", traceback.format_exc())
@@ -764,8 +764,12 @@ async def admin_upload_lesson(
     # 触发入库
     import subprocess, sys
     try:
-        subprocess.run([sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "ingest_knowledge.py")],
-                       capture_output=True, timeout=60)
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "ingest_knowledge.py")],
+            capture_output=True, text=True, timeout=120)
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout or "")[:300]
+            return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》入库失败：{err}"}
         return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
     except Exception:
         return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}
