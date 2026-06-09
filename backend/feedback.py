@@ -36,7 +36,9 @@ def submit_feedback(
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    filepath = FEEDBACK_DIR / f"{username}_{plan_id}.json"
+    import os as _os_fb
+    safe_id = _os_fb.path.basename(str(plan_id))
+    filepath = FEEDBACK_DIR / f"{username}_{safe_id}.json"
     from security import atomic_write
     atomic_write(filepath, json.dumps(record, ensure_ascii=False, indent=2).encode())
 

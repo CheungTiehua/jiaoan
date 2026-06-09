@@ -759,7 +759,8 @@ async def admin_upload_lesson(
     import re as _re
     safe_name = _re.sub(r'[《》\s/:*?"<>|]', '', lesson_name)[:100]
     dest = Path(__file__).resolve().parent.parent / "knowledge-base" / f"{safe_name}.md"
-    dest.write_text(formatted, encoding="utf-8")
+    from security import atomic_write
+    atomic_write(dest, formatted.encode("utf-8"))
 
     # 触发入库
     import subprocess, sys
