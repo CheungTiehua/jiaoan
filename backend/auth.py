@@ -38,7 +38,7 @@ def _verify_pw(password: str, hashed: str) -> bool:
         dk = bytes.fromhex(dk_hex)
         new_dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
         return new_dk == dk
-    except Exception:
+    except (ValueError, KeyError):
         return False
 
 
