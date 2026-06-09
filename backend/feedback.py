@@ -51,7 +51,9 @@ def submit_feedback(
 
 def get_feedback(plan_id: str) -> dict | None:
     """获取教案反馈（返回最新一条）"""
-    matches = sorted(FEEDBACK_DIR.glob(f"*_{plan_id}.json"), reverse=True)
+    import os as _os_fb2
+    safe_id = _os_fb2.path.basename(str(plan_id))
+    matches = sorted(FEEDBACK_DIR.glob(f"*_{safe_id}.json"), reverse=True)
     for f in matches:
         try:
             return json.loads(f.read_text())
