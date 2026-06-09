@@ -40,8 +40,8 @@ def submit_feedback(
     from security import atomic_write
     atomic_write(filepath, json.dumps(record, ensure_ascii=False, indent=2).encode())
 
-    # 更新引用权重
-    if useful_refs:
+    # 更新引用权重（仅当有实际评分时）
+    if useful_refs and rating >= 1:
         _update_weights(useful_refs, rating)
 
     return {"ok": True}

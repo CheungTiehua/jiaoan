@@ -508,11 +508,13 @@ export default function Home() {
                   <div className="flex items-center gap-1">
                     {[1,2,3,4,5].map(s => (
                       <button key={s} onClick={async () => {
-                        setFeedbackRating(s);
-                        await fetch(`${API}/feedback`, {
-                          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                          body: JSON.stringify({ plan_id: lastPlanId, grade, lesson, rating: s }),
-                        });
+                        try {
+                          await fetch(`${API}/feedback`, {
+                            method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                            body: JSON.stringify({ plan_id: lastPlanId, grade, lesson, rating: s }),
+                          });
+                          setFeedbackRating(s);  // 仅在请求成功后更新UI
+                        } catch { /* 静默失败 */ }
                       }} className={`text-xl transition-colors ${feedbackRating >= s ? "text-purple-500" : "text-gray-300 hover:text-purple-300"}`}>
                         ★
                       </button>
