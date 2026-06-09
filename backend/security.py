@@ -7,6 +7,7 @@ from pathlib import Path
 
 def atomic_write(filepath: Path, data: bytes):
     """原子写入：先写 .tmp，再 rename，崩溃不损坏原文件"""
+    filepath.parent.mkdir(parents=True, exist_ok=True)
     tmp = filepath.with_suffix(".tmp")
     tmp.write_bytes(data)
     tmp.replace(filepath)

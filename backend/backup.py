@@ -49,8 +49,12 @@ def create_backup() -> io.BytesIO:
             )
             zf.writestr("config.env.example", masked)
         # 元信息
+        try:
+            from config import VERSION as _bak_v
+        except Exception:
+            _bak_v = "1.0.0"
         zf.writestr("backup_meta.json", json.dumps({
-            "version": __import__("config").VERSION if hasattr(__import__("config"), "VERSION") else "1.0.0",
+            "version": _bak_v,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }, ensure_ascii=False, indent=2))
     buf.seek(0)
