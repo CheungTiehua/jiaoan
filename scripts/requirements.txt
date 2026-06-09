@@ -18,6 +18,10 @@ httpx>=0.26.0
 python-frontmatter>=1.0.0
 PyYAML>=6.0
 
+# 中文分词 + BM25
+jieba>=0.42.1
+rank-bm25>=0.2.2
+
 # 文档处理（备用）
 pdfplumber>=0.10.0
 

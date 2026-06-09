@@ -45,7 +45,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=$APP_DIR
-Environment="DEEPSEEK_API_KEY=$(grep DEEPSEEK_API_KEY $APP_DIR/.env 2>/dev/null | cut -d= -f2)"
+EnvironmentFile=$APP_DIR/.env
 Environment="LEKAI_PORT=$PORT"
 ExecStart=$APP_DIR/.venv/bin/python $APP_DIR/backend/main.py
 Restart=always

@@ -1,18 +1,7 @@
 version: '3.8'
 
 services:
-  # ChromaDB 独立服务（可选，也可用嵌入式）
-  chromadb:
-    image: chromadb/chroma:latest
-    volumes:
-      - chroma_data:/chroma/chroma
-    environment:
-      - IS_PERSISTENT=TRUE
-    ports:
-      - "8001:8000"
-    restart: unless-stopped
-
-  # FastAPI 后端
+  # FastAPI 后端（ChromaDB 使用嵌入式 PersistentClient）
   backend:
     build:
       context: .
@@ -20,8 +9,6 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
-      - CHROMA_HOST=chromadb
-      - CHROMA_PORT=8000
     volumes:
       - ./knowledge-base:/app/knowledge-base
       - chroma_data:/app/chroma_db
