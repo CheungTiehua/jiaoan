@@ -103,7 +103,7 @@ class ReviseResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    return RedirectResponse(url="http://localhost:3000")
+    return RedirectResponse(url="/api/health")
 
 
 # ---- 首次启动引导 ----
@@ -129,13 +129,14 @@ async def setup_complete(req: dict):
 
     env_file = Path(__file__).resolve().parent.parent / ".env"
     env_file.write_text(f"DEEPSEEK_API_KEY={api_key}\n")
+    env_file.chmod(0o600)
 
     ok, msg = register_user("admin", password)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
 
     import rag
-    rag._keys[:] = [k.strip() for k in api_key.split(",") if k.strip()]
+    rag.reload_keys(api_key)
     return {"ok": True, "message": "初始化完成"}
 
 
@@ -739,14 +740,7 @@ async def admin_device_info(username: str = Depends(require_admin_or_reviewer)):
     }
 
 
-# ---- Prompt 格式化模板（用于教案导入） ----
-
-FORMAT_LESSON_SYSTEM = """你是教案格式化助手。将原始教案内容整理为规范Markdown格式。保留全部教学要点。"""
-FORMAT_LESSON_USER = """请将以下原始教案整理为标准格式：
-
-{raw}
-
-输出完整的Markdown教案。"""
+# ---- start ----
 
 
 # ---- 知识库 Chunk 管理 ----

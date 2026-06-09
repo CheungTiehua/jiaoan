@@ -64,6 +64,13 @@ def _load_custom_prompt(key: str) -> str | None:
     return None
 
 
+def reload_keys(api_key: str):
+    """线程安全地重新加载 API Keys（setup完成后调用）"""
+    global _keys
+    with _key_lock:
+        _keys[:] = [k.strip() for k in api_key.split(",") if k.strip()]
+
+
 def call_deepseek(system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
     if not _keys:
         raise RuntimeError("请设置 DEEPSEEK_API_KEY")

