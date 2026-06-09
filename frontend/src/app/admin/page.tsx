@@ -116,15 +116,17 @@ export default function AdminPage() {
     } catch { console.error("admin API failed"); alert("网络错误，请重试"); }
   };
 
-type Section = "dashboard" | "reviews" | "prompts" | "roles" | "feedback" | "chunks" | "health" | "backup";
+type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedback" | "chunks" | "device" | "health" | "backup";
 
   const SECTIONS: { key: Section; label: string; icon: string }[] = [
     { key: "dashboard", label: "仪表盘", icon: "📊" },
     { key: "reviews", label: "审核队列", icon: "✅" },
+    { key: "upload", label: "教案入库", icon: "📤" },
     { key: "prompts", label: "提示词调优", icon: "🔧" },
     { key: "roles", label: "角色管理", icon: "👥" },
     { key: "chunks", label: "知识库Chunk", icon: "📦" },
     { key: "feedback", label: "反馈统计", icon: "⭐" },
+    { key: "device", label: "设备信息", icon: "🔐" },
     { key: "health", label: "系统健康", icon: "🩺" },
     { key: "backup", label: "备份恢复", icon: "💾" },
   ];
@@ -216,6 +218,28 @@ type Section = "dashboard" | "reviews" | "prompts" | "roles" | "feedback" | "chu
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {/* Upload Lesson */}
+          {section === "upload" && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">📤 教案入库</h2>
+              <p className="text-sm text-gray-500 mb-4">上传 .md / .txt / .docx 教案文档，自动格式化并入库。仅管理员和教研组长可操作。</p>
+              <div className="bg-white rounded-lg border p-6">
+                <input type="file" accept=".md,.txt,.docx" onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  const form = new FormData();
+                  form.append("file", f);
+                  try {
+                    const res = await fetch(`${API}/admin/upload-lesson`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+                    const d = await res.json();
+                    alert(d.ok ? d.message : "上传失败");
+                  } catch { alert("上传失败"); }
+                  e.target.value = "";
+                }} className="text-sm" />
               </div>
             </div>
           )}
@@ -338,6 +362,11 @@ type Section = "dashboard" | "reviews" | "prompts" | "roles" | "feedback" | "chu
             </div>
           )}
 
+          {/* Device Info */}
+          {section === "device" && (
+            <DeviceInfoPanel token={token} />
+          )}
+
           {/* Health */}
           {section === "health" && (
             <div>
@@ -434,6 +463,26 @@ type Section = "dashboard" | "reviews" | "prompts" | "roles" | "feedback" | "chu
             </div>
           )}
         </main>
+      </div>
+    </div>
+  );
+}
+
+function DeviceInfoPanel({ token }: { token: string }) {
+  const [info, setInfo] = useState<any>(null);
+  useEffect(() => {
+    fetch("/api/admin/device-info", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(setInfo).catch(() => {});
+  }, [token]);
+  if (!info) return <div><h2 className="text-lg font-bold text-gray-800 mb-4">🔐 设备信息</h2><p className="text-gray-400 text-sm">加载中...</p></div>;
+  return (
+    <div>
+      <h2 className="text-lg font-bold text-gray-800 mb-4">🔐 设备信息</h2>
+      <div className="bg-white rounded-lg border p-4 space-y-2 text-sm">
+        <div className="flex justify-between"><span className="text-gray-500">MAC地址</span><code>{info.mac}</code></div>
+        <div className="flex justify-between"><span className="text-gray-500">磁盘容量</span><span>{info.disk_total_gb}GB（可用 {info.disk_free_gb}GB / 已用 {info.disk_used_pct}%）</span></div>
+        <div className="flex justify-between"><span className="text-gray-500">授权状态</span><span className={info.license === "已授权" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>{info.license}</span></div>
+        <div className="flex justify-between"><span className="text-gray-500">系统版本</span><span>{info.version}</span></div>
       </div>
     </div>
   );

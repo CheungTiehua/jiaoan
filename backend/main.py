@@ -486,6 +486,84 @@ async def admin_annotation_stats(username: str = Depends(require_admin_or_review
     return get_annotation_stats()
 
 
+# ---- 教案入库（管理员上传教案文档） ----
+
+@app.post("/api/admin/upload-lesson")
+async def admin_upload_lesson(
+    file: UploadFile = FastAPIFile(...),
+    username: str = Depends(require_admin_or_reviewer)
+):
+    """上传教案文档(.md/.docx/.txt)，自动格式化后入库"""
+    import re
+    fn = file.filename or "untitled"
+    ext = Path(fn).suffix.lower()
+    if ext not in (".md", ".txt", ".docx"):
+        raise HTTPException(status_code=400, detail="仅支持 .md / .txt / .docx 格式")
+
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    if len(content) < 100:
+        raise HTTPException(status_code=400, detail="文档内容过短（至少100字符）")
+
+    # 尝试用 DeepSeek 格式化为标准模板
+    try:
+        from rag import call_deepseek
+        fmt_sys = "你是教案格式化助手。将原始教案内容整理为规范Markdown格式。保留全部教学要点。"
+        fmt_user = f"请将以下原始教案整理为标准格式：\n\n{content[:8000]}\n\n输出完整的Markdown教案。"
+        formatted = call_deepseek(fmt_sys, fmt_user)
+    except Exception:
+        formatted = content  # API不可用时直接用原文
+
+    # 提取课题名做文件名
+    match = re.search(r'《(.+?)》', formatted)
+    lesson_name = match.group(1) if match else Path(fn).stem
+
+    # 保存到 knowledge-base/
+    import re as _re
+    safe_name = _re.sub(r'[《》\s]', '', lesson_name)
+    dest = Path(__file__).resolve().parent.parent / "knowledge-base" / f"{safe_name}.md"
+    dest.write_text(formatted, encoding="utf-8")
+
+    # 触发入库
+    import subprocess, sys
+    try:
+        subprocess.run([sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "ingest_knowledge.py")],
+                       capture_output=True, timeout=60)
+        return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
+    except Exception:
+        return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}
+
+
+# ---- 设备信息 ----
+
+@app.get("/api/admin/device-info")
+async def admin_device_info(username: str = Depends(require_admin_or_reviewer)):
+    import uuid, shutil
+    proj = Path(__file__).resolve().parent.parent
+    mac = ":".join(f"{(uuid.getnode() >> (8*i)) & 0xff:02x}" for i in range(5, -1, -1))
+    disk = shutil.disk_usage(proj)
+    lic_file = proj / ".license"
+    lic_status = "已授权" if lic_file.exists() else "未授权"
+
+    return {
+        "mac": mac,
+        "disk_total_gb": round(disk.total / 1024**3, 1),
+        "disk_free_gb": round(disk.free / 1024**3, 1),
+        "disk_used_pct": round((disk.used / disk.total) * 100, 1),
+        "license": lic_status,
+        "version": "0.8.0",
+    }
+
+
+# ---- Prompt 格式化模板（用于教案导入） ----
+
+FORMAT_LESSON_SYSTEM = """你是教案格式化助手。将原始教案内容整理为规范Markdown格式。保留全部教学要点。"""
+FORMAT_LESSON_USER = """请将以下原始教案整理为标准格式：
+
+{raw}
+
+输出完整的Markdown教案。"""
+
+
 # ---- 知识库 Chunk 管理 ----
 
 @app.get("/api/admin/chunks")
