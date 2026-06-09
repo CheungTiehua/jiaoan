@@ -3,6 +3,7 @@ LeKai 段落标注 — 教研组长审核时标注教案具体段落
 """
 
 import json
+import os
 import time
 from pathlib import Path
 
@@ -26,7 +27,7 @@ def add_annotation(
     if section not in SECTIONS:
         section = "其他"
 
-    filepath = ANNOTATION_DIR / f"{review_id}.json"
+    filepath = ANNOTATION_DIR / f"{os.path.basename(review_id)}.json"
     annotations = []
     if filepath.exists():
         try:
@@ -49,7 +50,7 @@ def add_annotation(
 
 def get_annotations(review_id: str) -> list[dict]:
     """获取某次审核的所有标注"""
-    filepath = ANNOTATION_DIR / f"{review_id}.json"
+    filepath = ANNOTATION_DIR / f"{os.path.basename(review_id)}.json"
     if filepath.exists():
         try:
             return json.loads(filepath.read_text())

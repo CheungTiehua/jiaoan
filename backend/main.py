@@ -742,7 +742,7 @@ async def admin_upload_lesson(
                        capture_output=True, timeout=60)
         return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
     except Exception:
-        return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}
+        return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}
 
 
 # ---- 设备信息 ----

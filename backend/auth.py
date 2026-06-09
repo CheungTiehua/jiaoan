@@ -193,8 +193,8 @@ def save_history(username: str, grade: str, lesson: str, plan: dict) -> str:
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "grade": grade,
         "lesson": lesson,
-        "exam_analysis": plan.get("exam_analysis", "")[:500],
-        "peer_analysis": plan.get("peer_analysis", "")[:500],
+        "exam_analysis": plan.get("exam_analysis", ""),
+        "peer_analysis": plan.get("peer_analysis", ""),
         "lesson_plan": plan.get("lesson_plan", ""),
         "teaching_guide": plan.get("teaching_guide", ""),
     }
