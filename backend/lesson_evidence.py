@@ -83,7 +83,7 @@ def format_lesson_evidence(
 ) -> str:
     """将 Evidence Pack 格式化为 Prompt 文本"""
     if not pack:
-        return "（知识库中暂无相关教案参考）"
+        return "（当前知识库中缺少该课参考教案，系统仅基于通用教学经验和统编版教材要求生成。建议联系管理员导入相关教案以提升质量。）"
 
     lines = []
     for dim, chunks in pack.items():

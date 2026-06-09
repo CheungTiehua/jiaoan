@@ -3,6 +3,9 @@
 import os
 from pathlib import Path
 
+# 版本（统一源）
+VERSION = "1.0.0"
+
 # 项目路径
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"

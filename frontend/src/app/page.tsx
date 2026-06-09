@@ -371,10 +371,7 @@ export default function Home() {
             {authMode === "login" ? "登录" : "注册"}
           </button>
           {authError && <div className="text-sm text-red-600 text-center mb-3">{authError}</div>}
-          <button onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthError(""); }}
-            className="w-full text-xs text-amber-600 hover:text-amber-800">
-            {authMode === "login" ? "没有账号？点击注册" : "已有账号？点击登录"}
-          </button>
+          <p className="text-xs text-gray-400 text-center">账号由管理员创建，请联系教研组长</p>
         </div>
       </div>
     );
@@ -388,7 +385,7 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <span className="text-xl select-none">📖</span>
             <h1 className="text-base font-bold text-amber-800">LeKai</h1>
-            <span className="text-xs text-gray-400 hidden sm:inline">v0.4 · 多用户</span>
+            <span className="text-xs text-gray-400 hidden sm:inline">K9-AI v1.0</span>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={loadHistory} className="text-xs text-gray-500 hover:text-amber-700 px-2 py-1 rounded">📋 历史</button>

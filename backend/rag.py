@@ -31,6 +31,17 @@ _key_counter = 0
 _key_lock = threading.Lock()
 _keys = [k.strip() for k in DEEPSEEK_API_KEY.split(",") if k.strip()] if DEEPSEEK_API_KEY else []
 
+# 启动时尝试从持久化文件加载 Key（Docker场景环境变量可能为空）
+if not _keys:
+    _key_file = Path(__file__).resolve().parent.parent / "data" / "api_key.json"
+    if _key_file.exists():
+        try:
+            import json as _j
+            _stored = _j.loads(_key_file.read_text()).get("api_key", "")
+            _keys = [k.strip() for k in _stored.split(",") if k.strip()]
+        except Exception:
+            pass
+
 
 def _get_api_key() -> str:
     global _key_counter

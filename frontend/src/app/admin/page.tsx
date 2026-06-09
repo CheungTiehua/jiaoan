@@ -314,6 +314,23 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
             </div>
           )}
 
+          {/* Create User */}
+          <div className="bg-white rounded-lg border p-4 mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">➕ 创建用户</h3>
+            <div className="flex gap-2">
+              <input type="text" id="new-user-name" placeholder="用户名" className="border rounded px-2 py-1 text-sm w-32" />
+              <input type="password" id="new-user-pass" placeholder="密码" className="border rounded px-2 py-1 text-sm w-32" />
+              <button onClick={async () => {
+                const u = (document.getElementById("new-user-name") as HTMLInputElement)?.value;
+                const p = (document.getElementById("new-user-pass") as HTMLInputElement)?.value;
+                if (!u || !p) { alert("请填写用户名和密码"); return; }
+                const res = await fetch(`${API}/register`, { method: "POST", headers, body: JSON.stringify({ username: u, password: p }) });
+                if (res.ok) { alert("用户创建成功"); loadDashboard(); }
+                else { const d = await res.json(); alert(d.detail); }
+              }} className="bg-amber-600 text-white text-sm px-3 py-1 rounded">创建</button>
+            </div>
+          </div>
+
           {/* Roles */}
           {section === "roles" && (
             <div>

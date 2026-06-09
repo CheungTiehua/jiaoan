@@ -1,4 +1,4 @@
-"""LeKai v0.4 — 多用户 + 认证 + 历史"""
+"""LeKai教案系统(K9-AI版) — v1.0"""
 
 import io
 import json as _json
@@ -40,8 +40,8 @@ from fastapi import UploadFile, File as FastAPIFile, Form
 
 app = FastAPI(
     title="LeKai教案知识库 API",
-    description="小学语文教案智能生成平台 v0.4",
-    version="0.4.0"
+    description="小学语文教案智能生成平台 — LeKai K9-AI版",
+    version=VERSION
 )
 
 import os as _os
@@ -127,9 +127,15 @@ async def setup_complete(req: dict):
     if not api_key:
         raise HTTPException(status_code=400, detail="请填写DeepSeek API Key")
 
+    # 持久化 API Key：同时写 .env 和 data/api_key.json
     env_file = Path(__file__).resolve().parent.parent / ".env"
     env_file.write_text(f"DEEPSEEK_API_KEY={api_key}\n")
     env_file.chmod(0o600)
+
+    import json as _j
+    key_file = Path(__file__).resolve().parent.parent / "data" / "api_key.json"
+    key_file.write_text(_j.dumps({"api_key": api_key}))
+    key_file.chmod(0o600)
 
     ok, msg = register_user("admin", password)
     if not ok:
@@ -178,7 +184,7 @@ async def setup_wifi_connect(req: dict):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "version": "0.4.0"}
+    return {"status": "ok", "version": VERSION}
 
 
 @app.get("/api/textbooks")
@@ -198,7 +204,11 @@ async def textbooks():
 # ---- Auth API ----
 
 @app.post("/api/register")
-async def register(req: AuthRequest, request: Request = None):
+async def register(req: AuthRequest, request: Request = None, username: str = Depends(require_auth)):
+    """仅管理员可创建新用户（学校场景，关闭公开注册）"""
+    role = get_user_role(username)
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="仅管理员可创建用户")
     client_ip = request.client.host if request else "127.0.0.1"
     if check_rate_limit(f"reg_{client_ip}", 5, 300):
         raise HTTPException(status_code=429, detail="注册过于频繁，请5分钟后再试")
@@ -571,6 +581,10 @@ async def evaluate_plan(file: UploadFile = FastAPIFile(...), username: str = Dep
     ext = Path(fn).suffix.lower()
     if ext not in (".md", ".txt", ".docx"):
         raise HTTPException(status_code=400, detail="仅支持 .md / .txt / .docx 格式")
+    # 上传安全：大小限制 + 安全文件名
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件不能超过5MB")
 
     # 解析文档内容（docx 用 python-docx 提取，md/txt 直接读）
     if ext == ".docx":
@@ -678,6 +692,10 @@ async def admin_upload_lesson(
     ext = Path(fn).suffix.lower()
     if ext not in (".md", ".txt", ".docx"):
         raise HTTPException(status_code=400, detail="仅支持 .md / .txt / .docx 格式")
+    # 上传安全：大小限制 + 安全文件名
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件不能超过5MB")
 
     # 解析文档内容
     if ext == ".docx":
@@ -705,7 +723,7 @@ async def admin_upload_lesson(
 
     # 保存到 knowledge-base/
     import re as _re
-    safe_name = _re.sub(r'[《》\s]', '', lesson_name)
+    safe_name = _re.sub(r'[《》\s/:*?"<>|]', '', lesson_name)[:100]
     dest = Path(__file__).resolve().parent.parent / "knowledge-base" / f"{safe_name}.md"
     dest.write_text(formatted, encoding="utf-8")
 
@@ -736,7 +754,7 @@ async def admin_device_info(username: str = Depends(require_admin_or_reviewer)):
         "disk_free_gb": round(disk.free / 1024**3, 1),
         "disk_used_pct": round((disk.used / disk.total) * 100, 1),
         "license": lic_status,
-        "version": "0.8.0",
+        "version": VERSION,
     }
 
 
