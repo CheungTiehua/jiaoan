@@ -16,9 +16,15 @@ from security import atomic_write
 
 _log = logging.getLogger("lekai")
 
+import os
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 REVIEWS_DIR = HISTORY_DIR.parent / "reviews"
 REVIEWS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _safe_id(record_id: str) -> str:
+    return os.path.basename(str(record_id))
 
 
 # ============================================================
@@ -44,7 +50,7 @@ def submit_for_review(username: str, record_id: str) -> bool:
         "lesson_plan": detail.get("lesson_plan", "")[:2000],
         "teaching_guide": detail.get("teaching_guide", "")[:1000],
     }
-    filepath = REVIEWS_DIR / f"{record_id}.json"
+    filepath = REVIEWS_DIR / f"{_safe_id(record_id)}.json"
     atomic_write(filepath, json.dumps(review, ensure_ascii=False, indent=2).encode())
     return True
 
@@ -65,7 +71,7 @@ def get_review_queue() -> list[dict]:
 
 def get_review_detail(record_id: str) -> Optional[dict]:
     """获取待审核教案的完整详情"""
-    filepath = REVIEWS_DIR / f"{record_id}.json"
+    filepath = REVIEWS_DIR / f"{_safe_id(record_id)}.json"
     if not filepath.exists():
         return None
     try:
@@ -77,7 +83,7 @@ def get_review_detail(record_id: str) -> Optional[dict]:
 
 def approve_review(record_id: str, reviewer: str, comment: str = "") -> bool:
     """审核通过"""
-    filepath = REVIEWS_DIR / f"{record_id}.json"
+    filepath = REVIEWS_DIR / f"{_safe_id(record_id)}.json"
     if not filepath.exists():
         return False
     try:
@@ -95,7 +101,7 @@ def approve_review(record_id: str, reviewer: str, comment: str = "") -> bool:
 
 def reject_review(record_id: str, reviewer: str, comment: str) -> bool:
     """审核打回"""
-    filepath = REVIEWS_DIR / f"{record_id}.json"
+    filepath = REVIEWS_DIR / f"{_safe_id(record_id)}.json"
     if not filepath.exists():
         return False
     try:
@@ -155,14 +161,6 @@ def get_dashboard_stats() -> dict:
         if ts:
             day = ts[:10]
             daily[day] += 1
-
-    # 活跃用户（最近7天有生成）
-    recent_days = sorted(daily.keys(), reverse=True)[:7]
-    active_users = set()
-    for r in all_records:
-        if r.get("timestamp", "")[:10] in recent_days:
-            # 从记录所属推断用户
-            pass  # 需要记录中带 username
 
     return {
         "total_users": total_users,

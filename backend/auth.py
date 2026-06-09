@@ -210,7 +210,8 @@ def get_history(username: str, limit: int = 20) -> list[dict]:
 
 def get_history_detail(username: str, record_id: str) -> Optional[dict]:
     """获取单条历史详情（含完整教案）"""
-    filepath = HISTORY_DIR / username / f"{record_id}.json"
+    safe_id = os.path.basename(str(record_id))
+    filepath = HISTORY_DIR / username / f"{safe_id}.json"
     if not filepath.exists():
         return None
     try:
