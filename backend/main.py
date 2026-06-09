@@ -164,9 +164,13 @@ async def me(authorization: str = Header(default="")):
 # ---- Protected API ----
 
 @app.post("/api/generate", response_model=GenerateResponse)
-async def generate(req: GenerateRequest, username: str = Depends(require_auth)):
+async def generate(req: GenerateRequest, request: Request, username: str = Depends(require_auth)):
     if not req.lesson.strip():
         raise HTTPException(status_code=400, detail="课题名称不能为空")
+    # 生成端点速率限制
+    from security import check_rate_limit
+    if check_rate_limit(f"gen_{username}", 20, 60):
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
     try:
         result = generate_lesson(
             grade=req.grade, lesson=req.lesson.strip(),
