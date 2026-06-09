@@ -24,6 +24,9 @@ export default function Home() {
   const [lastPlanId, setLastPlanId] = useState<string>("");
   const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackRating, setFeedbackRating] = useState(0);
+  const [evaluation, setEvaluation] = useState("");
+  const [evaluating, setEvaluating] = useState(false);
+  const [evaluatedLesson, setEvaluatedLesson] = useState("");
 
   // Unit plan
   const [unitName, setUnitName] = useState("");
@@ -674,6 +677,34 @@ export default function Home() {
                 </div>
               </div>
             )}
+
+            {/* Evaluate Plan */}
+            <div className="bg-white rounded-xl shadow-sm border border-teal-100 p-4 mb-4">
+              <h3 className="text-sm font-semibold text-teal-800 mb-2">🔍 教案评价</h3>
+              <p className="text-xs text-gray-500 mb-2">上传你的教案，AI对照优秀教案给出评价和改进建议</p>
+              <input type="file" accept=".md,.txt,.docx" onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const form = new FormData();
+                form.append("file", f);
+                setEvaluation(""); setEvaluating(true);
+                try {
+                  const res = await fetch(`${API}/evaluate`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
+                  const d = await res.json();
+                  setEvaluation(d.evaluation || "");
+                  setEvaluatedLesson(d.lesson_name || "");
+                } catch { setError("评价失败"); }
+                finally { setEvaluating(false); e.target.value = ""; }
+              }} className="text-xs" />
+              {evaluating && <p className="text-xs text-gray-400 mt-2">正在分析...</p>}
+              {evaluation && (
+                <div className="mt-3 bg-teal-50 rounded-lg p-3 max-h-80 overflow-y-auto">
+                  <div className="prose prose-teal prose-sm max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{evaluation}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Empty */}
             {!loading && !lessonPlan && !examAnalysis && (

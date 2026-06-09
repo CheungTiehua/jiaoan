@@ -558,6 +558,40 @@ async def admin_annotation_stats(username: str = Depends(require_admin_or_review
     return get_annotation_stats()
 
 
+# ---- 教案评价（老师上传自己的教案，AI对照知识库评价） ----
+
+@app.post("/api/evaluate")
+async def evaluate_plan(file: UploadFile = FastAPIFile(...), username: str = Depends(require_auth)):
+    """上传教案文件，AI对照知识库中的优秀教案进行评价"""
+    fn = file.filename or "untitled"
+    ext = Path(fn).suffix.lower()
+    if ext not in (".md", ".txt", ".docx"):
+        raise HTTPException(status_code=400, detail="仅支持 .md / .txt / .docx 格式")
+
+    content = (await file.read()).decode("utf-8", errors="ignore")
+    if len(content) < 200:
+        raise HTTPException(status_code=400, detail="教案内容过短，至少200字符")
+
+    # 提取课题名
+    import re
+    match = re.search(r'《(.+?)》', content)
+    lesson_name = match.group(1) if match else Path(fn).stem
+
+    # 检索知识库中的同类优秀教案
+    from rag import retrieve_structured, call_deepseek
+    context, _ = retrieve_structured(f"{lesson_name} 教案", top_k=8)
+
+    # 调用评价 Prompt
+    from prompts import EVALUATE_SYSTEM, EVALUATE_USER
+    eval_prompt = EVALUATE_USER.format(uploaded_plan=content[:6000], context=context, lesson_name=lesson_name)
+    try:
+        evaluation = call_deepseek(EVALUATE_SYSTEM, eval_prompt, temperature=0.3)
+    except Exception:
+        raise HTTPException(status_code=500, detail="评价生成失败，请稍后重试")
+
+    return {"evaluation": evaluation, "lesson_name": lesson_name}
+
+
 # ---- 教案导出 ----
 
 @app.get("/api/export/{plan_id}")
