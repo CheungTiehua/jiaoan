@@ -30,10 +30,9 @@ def get_health() -> dict:
 
     # 向量库
     try:
-        import chromadb
-        client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        collections = client.list_collections()
-        count = sum(c.count() for c in collections)
+        from search_engine import get_collection
+        col = get_collection()
+        count = col.count()
         health["checks"]["chromadb"] = {"collections": len(collections), "total_chunks": count, "ok": True}
     except Exception as e:
         health["checks"]["chromadb"] = {"ok": False, "error": str(e)}

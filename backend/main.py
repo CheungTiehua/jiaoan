@@ -194,6 +194,29 @@ async def setup_wifi_connect(req: dict):
 async def health():
     return {"status": "ok", "version": VERSION}
 
+@app.get("/api/health/deep")
+async def health_deep():
+    """深度健康检查：验证API Key、Embedding模型、知识库"""
+    try:
+        from rag import call_deepseek
+        call_deepseek("ping", "pong", temperature=0)
+        api_ok = True
+    except Exception:
+        api_ok = False
+    try:
+        from search_engine import get_embedding_model
+        get_embedding_model()
+        model_ok = True
+    except Exception:
+        model_ok = False
+    try:
+        from search_engine import get_collection
+        col = get_collection()
+        chunk_count = col.count()
+    except Exception:
+        chunk_count = 0
+    return {"status": "ok", "api_key_ok": api_ok, "model_ok": model_ok, "chunks": chunk_count}
+
 
 @app.get("/api/textbooks")
 async def textbooks():
@@ -366,8 +389,9 @@ class ReviewRejectRequest(BaseModel):
 
 
 @app.post("/api/admin/reviews/{record_id}/reject")
-async def admin_reject(record_id: str, req: ReviewRejectRequest = ReviewRejectRequest(), username: str = Depends(require_admin_or_reviewer)):
-    ok = reject_review(record_id, username, req.comment)
+async def admin_reject(record_id: str, req: dict = {}, username: str = Depends(require_admin_or_reviewer)):
+    comment = str(req.get("comment", "")) if isinstance(req, dict) else ""
+    ok = reject_review(record_id, username, comment)
     if not ok:
         raise HTTPException(status_code=404, detail="审核记录不存在")
     return {"message": "已打回"}

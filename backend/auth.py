@@ -26,7 +26,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 def _hash_pw(password: str) -> str:
     """PBKDF2 密码哈希"""
     salt = os.urandom(16)
-    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600000)
     return salt.hex() + ":" + dk.hex()
 
 
@@ -36,7 +36,7 @@ def _verify_pw(password: str, hashed: str) -> bool:
         salt_hex, dk_hex = hashed.split(":")
         salt = bytes.fromhex(salt_hex)
         dk = bytes.fromhex(dk_hex)
-        new_dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100000)
+        new_dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 600000)
         return new_dk == dk
     except (ValueError, KeyError):
         return False
