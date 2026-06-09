@@ -173,7 +173,8 @@ def get_dashboard_stats() -> dict:
         "daily_trend": dict(sorted(daily.items())[-14:]),
         "teacher_summary": [
             {"username": u, "total": teacher_stats.get(u, {}).get("total", 0),
-             "recent_lessons": teacher_stats.get(u, {}).get("lessons", [])[:5]}
+             "recent_lessons": teacher_stats.get(u, {}).get("lessons", [])[:5],
+             "role": next((usr.get("role", "teacher") for usr in users if usr["username"] == u), "teacher")}
             for u in sorted(teacher_stats.keys())
         ],
         "last_updated": time.strftime("%Y-%m-%d %H:%M:%S"),

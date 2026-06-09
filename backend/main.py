@@ -183,8 +183,12 @@ async def revise(req: ReviseRequest, username: str = Depends(require_auth)):
     try:
         new_plan = revise_lesson(req.current_plan, req.revision_request, req.history)
         return ReviseResponse(lesson_plan=new_plan)
-    except RuntimeError as e:
-        raise HTTPException(status_code=500, detail="服务器错误，请稍后重试")
+    except RuntimeError:
+        raise HTTPException(status_code=500, detail="API Key 未配置")
+    except Exception:
+        import traceback, logging
+        logging.getLogger("lekai").error("修改失败:\n%s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="修改失败，请稍后重试")
 
 
 @app.get("/api/history")

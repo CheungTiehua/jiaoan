@@ -74,30 +74,35 @@ def save_sessions(sessions: dict):
 
 
 def register_user(username: str, password: str) -> tuple[bool, str]:
-    """注册，返回 (成功, 消息)"""
+    """注册（文件锁保护），返回 (成功, 消息)"""
     username = username.strip()
     if not username or len(username) < 2:
         return False, "用户名至少2个字符"
     if not password or len(password) < 4:
         return False, "密码至少4个字符"
 
-    users = load_users()
-    if username in users:
-        return False, "用户名已存在"
+    import fcntl
+    lock_file = DATA_DIR / "users.lock"
+    with open(lock_file, "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            users = load_users()
+            if username in users:
+                return False, "用户名已存在"
 
-    users[username] = {
-        "password": _hash_pw(password),
-        "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "role": "teacher",
-    }
-    save_users(users)
+            users[username] = {
+                "password": _hash_pw(password),
+                "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "role": "teacher",
+            }
+            # 首个注册用户自动成为管理员
+            if len(users) == 1:
+                users[username]["role"] = "admin"
 
-    # 首个注册用户自动成为管理员
-    if len(users) == 1:
-        users[username]["role"] = "admin"
-        save_users(users)
-
-    return True, "注册成功"
+            save_users(users)
+            return True, "注册成功"
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)
 
 
 def login_user(username: str, password: str) -> Optional[str]:
