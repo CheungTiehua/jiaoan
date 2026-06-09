@@ -181,3 +181,34 @@ echo ""
 echo "  状态: systemctl status $SERVICE_BACKEND $SERVICE_FRONTEND nginx"
 echo "  日志: journalctl -u $SERVICE_BACKEND -f"
 echo "========================================"
+
+# 7. 生成备份 token + cron 自动备份
+echo "[7/7] 配置自动备份..."
+
+# 生成永不重复的备份 token
+BACKUP_TOKEN=$(python3 -c "import secrets; print(secrets.token_hex(32))")
+echo "$BACKUP_TOKEN" > $APP_DIR/.backup_token
+chmod 600 $APP_DIR/.backup_token
+chown $APP_USER:$APP_USER $APP_DIR/.backup_token
+
+# 将 token 注入 auth 系统（重启后生效）
+python3 -c "
+import json, os
+tf = '$APP_DIR/.backup_token'
+if os.path.exists(tf):
+    tok = open(tf).read().strip()
+    # 将 backup token 作为系统级 session 写入
+    sessions_file = '$APP_DIR/data/sessions.json'
+    sessions = {}
+    import sys; sys.path.insert(0, '$APP_DIR')
+    from auth import load_sessions, save_sessions
+    sessions = load_sessions()
+    sessions[tok] = {'username': 'system', 'created_at': 0, 'expires_at': 9999999999}
+    save_sessions(sessions)
+"
+
+# cron: 每天凌晨 3 点备份
+(crontab -u root -l 2>/dev/null; echo "0 3 * * * bash $APP_DIR/scripts/auto_backup.sh >> $APP_DIR/logs/backup.log 2>&1") | crontab -u root -
+
+# 挂载点提示
+echo "提示: 请将第二块 SSD 挂载到 /mnt/backup"
