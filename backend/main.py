@@ -104,6 +104,73 @@ class ReviseResponse(BaseModel):
 async def root():
     return RedirectResponse(url="http://localhost:3000")
 
+
+# ---- 首次启动引导 ----
+
+@app.get("/api/setup/status")
+async def setup_status():
+    from auth import load_users
+    return {"needs_setup": len(load_users()) == 0}
+
+
+@app.post("/api/setup/complete")
+async def setup_complete(req: dict):
+    password = str(req.get("password", "")).strip()
+    api_key = str(req.get("api_key", "")).strip()
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="管理员密码至少4位")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请填写DeepSeek API Key")
+
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    env_file.write_text(f"DEEPSEEK_API_KEY={api_key}\n")
+
+    from auth import register_user
+    ok, msg = register_user("admin", password)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+
+    import rag
+    rag._keys[:] = [k.strip() for k in api_key.split(",") if k.strip()]
+    return {"ok": True, "message": "初始化完成"}
+
+
+@app.get("/api/setup/wifi-scan")
+async def setup_wifi_scan():
+    import subprocess
+    try:
+        r = subprocess.run(["nmcli","-t","-f","SSID,SIGNAL,SECURITY","dev","wifi","list","--rescan","yes"],
+                         capture_output=True, text=True, timeout=15)
+        nets = []
+        for line in r.stdout.strip().split("\n"):
+            p = line.split(":")
+            if len(p) >= 2 and p[0].strip():
+                nets.append({"ssid": p[0], "signal": int(p[1]) if len(p)>1 and p[1].isdigit() else 0,
+                            "security": p[2] if len(p)>2 else ""})
+        seen = set()
+        uniq = [n for n in sorted(nets, key=lambda x: -x["signal"]) if not (n["ssid"] in seen or seen.add(n["ssid"]))]
+        return {"networks": uniq[:20]}
+    except Exception:
+        return {"networks": [], "error": "WiFi扫描仅Linux盒子可用"}
+
+
+@app.post("/api/setup/wifi-connect")
+async def setup_wifi_connect(req: dict):
+    ssid = str(req.get("ssid","")).strip()
+    pw = str(req.get("password","")).strip()
+    if not ssid:
+        raise HTTPException(status_code=400, detail="请选择WiFi网络")
+    import subprocess
+    try:
+        args = ["nmcli","dev","wifi","connect",ssid]
+        if pw: args += ["password", pw]
+        subprocess.run(args, capture_output=True, timeout=30, check=True)
+        return {"ok": True, "ssid": ssid}
+    except subprocess.CalledProcessError:
+        raise HTTPException(status_code=400, detail="WiFi密码错误或信号弱")
+    except Exception:
+        raise HTTPException(status_code=400, detail="WiFi连接失败")
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "version": "0.4.0"}

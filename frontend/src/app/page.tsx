@@ -72,10 +72,25 @@ export default function Home() {
   const [revisionInput, setRevisionInput] = useState("");
   const [revisionHistory, setRevisionHistory] = useState<string[]>([]);
 
+  // Setup wizard
+  const [needsSetup, setNeedsSetup] = useState(false);
+  const [setupStep, setSetupStep] = useState(1);
+  const [wifiList, setWifiList] = useState<any[]>([]);
+  const [wifiSSID, setWifiSSID] = useState("");
+  const [wifiPass, setWifiPass] = useState("");
+  const [wifiScanning, setWifiScanning] = useState(false);
+  const [setupAdminPass, setSetupAdminPass] = useState("");
+  const [setupApiKey, setSetupApiKey] = useState("");
+  const [setupError, setSetupError] = useState("");
+
   // Init: load token from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("lekai_token");
     if (saved) setToken(saved);
+    // 检查是否需要初始化
+    fetch("/api/setup/status").then(r => r.json()).then(d => {
+      if (d.needs_setup) setNeedsSetup(true);
+    }).catch(() => {});
   }, []);
 
   // Load textbooks
@@ -235,6 +250,104 @@ export default function Home() {
     { key: "exam", label: "考点", icon: "🎯" }, { key: "peer", label: "同行", icon: "👥" },
     { key: "plan", label: "教案", icon: "📝" }, { key: "guide", label: "辅导", icon: "🎓" },
   ];
+
+  // ---- SETUP WIZARD ----
+  if (needsSetup) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-amber-50">
+        <div className="bg-white rounded-xl shadow-lg border border-amber-100 p-8 w-full max-w-md">
+          <div className="text-center mb-6">
+            <span className="text-4xl select-none">📖</span>
+            <h1 className="text-xl font-bold text-amber-800 mt-2">LeKai教案知识库</h1>
+            <p className="text-sm text-amber-600 mt-1">首次启动 · 初始化设置</p>
+          </div>
+
+          {/* Step indicator */}
+          <div className="flex justify-center gap-2 mb-6">
+            {[1,2,3].map(s => (
+              <div key={s} className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${setupStep >= s ? "bg-amber-600 text-white" : "bg-gray-200 text-gray-500"}`}>{s}</div>
+            ))}
+          </div>
+
+          {setupStep === 1 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">📡 WiFi 网络设置</h3>
+              <p className="text-xs text-gray-500 mb-3">盒子需要联网才能使用AI功能。请连接学校的WiFi。</p>
+              <button onClick={async () => {
+                setWifiScanning(true);
+                const d = await fetch("/api/setup/wifi-scan").then(r => r.json());
+                setWifiList(d.networks || []);
+                setWifiScanning(false);
+              }} disabled={wifiScanning} className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm mb-3 hover:bg-blue-700 disabled:bg-blue-300">
+                {wifiScanning ? "📡 扫描中..." : "📡 扫描WiFi"}
+              </button>
+              {wifiList.length > 0 && (
+                <div className="max-h-40 overflow-y-auto border rounded-lg mb-3">
+                  {wifiList.map(w => (
+                    <button key={w.ssid} onClick={() => setWifiSSID(w.ssid)}
+                      className={`w-full text-left px-3 py-2 text-xs border-b hover:bg-amber-50 ${wifiSSID === w.ssid ? "bg-amber-100" : ""}`}>
+                      {w.ssid} <span className="text-gray-400">{w.signal > 60 ? "📶📶📶" : w.signal > 30 ? "📶📶" : "📶"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {wifiSSID && (
+                <>
+                  <input type="password" value={wifiPass} onChange={e => setWifiPass(e.target.value)}
+                    placeholder="WiFi密码（无密码留空）" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3" />
+                  <button onClick={async () => {
+                    try {
+                      const r = await fetch("/api/setup/wifi-connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ssid: wifiSSID, password: wifiPass }) });
+                      if (r.ok) { setSetupStep(2); setSetupError(""); }
+                      else { const d = await r.json(); setSetupError(d.detail); }
+                    } catch { setSetupError("连接失败"); }
+                  }} className="w-full bg-green-600 text-white py-2 rounded-lg text-sm hover:bg-green-700 mb-2">
+                    连接 {wifiSSID}
+                  </button>
+                  <button onClick={() => setSetupStep(2)} className="w-full text-xs text-gray-400 hover:text-gray-600">跳过（已插网线）</button>
+                </>
+              )}
+              {!wifiSSID && wifiList.length === 0 && !wifiScanning && (
+                <button onClick={() => setSetupStep(2)} className="w-full text-xs text-gray-400 hover:text-gray-600">跳过WiFi设置（已插网线）</button>
+              )}
+            </div>
+          )}
+
+          {setupStep === 2 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">🔐 设置管理员密码</h3>
+              <p className="text-xs text-gray-500 mb-3">这是您以后登录系统用的账号和密码。</p>
+              <input type="password" value={setupAdminPass} onChange={e => setSetupAdminPass(e.target.value)}
+                placeholder="管理员密码（至少4位）" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-3" />
+              <button onClick={() => {
+                if (setupAdminPass.length < 4) { setSetupError("密码至少4位"); return; }
+                setSetupStep(3); setSetupError("");
+              }} className="w-full bg-amber-600 text-white py-2 rounded-lg text-sm hover:bg-amber-700">下一步</button>
+            </div>
+          )}
+
+          {setupStep === 3 && (
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">🔑 DeepSeek API Key</h3>
+              <p className="text-xs text-gray-500 mb-3">系统使用DeepSeek大模型生成教案。请在 platform.deepseek.com 注册获取Key。</p>
+              <input type="text" value={setupApiKey} onChange={e => setSetupApiKey(e.target.value)}
+                placeholder="sk-xxxxxxxx" className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 font-mono" />
+              <button onClick={async () => {
+                setSetupError("");
+                try {
+                  const r = await fetch("/api/setup/complete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: setupAdminPass, api_key: setupApiKey }) });
+                  if (r.ok) { setNeedsSetup(false); }
+                  else { const d = await r.json(); setSetupError(d.detail); }
+                } catch { setSetupError("初始化失败，请检查网络"); }
+              }} className="w-full bg-amber-600 text-white py-2 rounded-lg text-sm hover:bg-amber-700 mb-3">完成初始化</button>
+            </div>
+          )}
+
+          {setupError && <div className="text-sm text-red-600 text-center mt-3">{setupError}</div>}
+        </div>
+      </div>
+    );
+  }
 
   // ---- LOGIN PAGE ----
   if (!token) {
