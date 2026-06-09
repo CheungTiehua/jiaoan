@@ -418,7 +418,8 @@ async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
     for key in ("chat_prompt", "audit_prompt"):
         if key in req:
             cur[key] = str(req[key])[:5000]
-    PROMPTS_FILE.write_text(_json.dumps(cur, ensure_ascii=False, indent=2))
+    from security import atomic_write
+    atomic_write(PROMPTS_FILE, _json.dumps(cur, ensure_ascii=False, indent=2).encode())
     return {"ok": True, "message": "提示词已更新，立即生效"}
 
 

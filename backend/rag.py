@@ -60,12 +60,12 @@ def call_deepseek(system_prompt: str, user_prompt: str, temperature: float = 0.3
     if not _keys:
         raise RuntimeError("请设置 DEEPSEEK_API_KEY")
     # 在线自定义 Prompt 覆盖（管理员可修改，立即生效）
-    custom = _load_custom_prompt("system_override")
+    custom = _load_custom_prompt("chat_prompt")
     if custom:
         system_prompt = custom
-    custom_user = _load_custom_prompt("user_override")
+    custom_user = _load_custom_prompt("audit_prompt")
     if custom_user:
-        user_prompt = custom_user.format(user_prompt=user_prompt) if "{user_prompt}" in custom_user else custom_user
+        user_prompt = custom_user
 
     headers = {"Authorization": f"Bearer {_get_api_key()}", "Content-Type": "application/json"}
     payload = {"model": DEEPSEEK_MODEL, "messages": [
