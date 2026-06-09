@@ -23,6 +23,8 @@ export default function AdminPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedRole, setSelectedRole] = useState("teacher");
+  // Feedback
+  const [feedbackStats, setFeedbackStats] = useState<any>(null);
   // Health
   const [health, setHealth] = useState<any>(null);
 
@@ -70,6 +72,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!token) return;
     if (section === "dashboard" || section === "reviews") loadDashboard();
+    if (section === "feedback") fetch(`${API}/admin/feedback-stats`, { headers }).then(r => r.json()).then(setFeedbackStats);
     if (section === "health") loadHealth();
     if (section === "prompts") loadPrompts();
     if (section === "roles") loadDashboard().then((dr) => {
@@ -117,6 +120,7 @@ export default function AdminPage() {
     { key: "reviews", label: "审核队列", icon: "✅" },
     { key: "prompts", label: "提示词调优", icon: "🔧" },
     { key: "roles", label: "角色管理", icon: "👥" },
+    { key: "feedback", label: "反馈统计", icon: "⭐" },
     { key: "health", label: "系统健康", icon: "🩺" },
     { key: "backup", label: "备份恢复", icon: "💾" },
   ];
@@ -241,6 +245,16 @@ export default function AdminPage() {
                         <button onClick={async () => {
                           try { await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers }); loadDashboard(); } catch { console.error("reject failed"); }
                         }} className="bg-red-500 text-white text-sm px-4 py-1 rounded hover:bg-red-600">打回</button>
+                        <button onClick={async () => {
+                          const section = prompt("标注章节（教材分析/教学目标/教学过程/板书设计/作业布置）：");
+                          const annType = prompt("类型（praise=表扬/improve=改进/note=备注）：");
+                          const text = prompt("标注内容：");
+                          if (section && annType && text) {
+                            await fetch(`${API}/admin/annotations`, {
+                              method: "POST", headers, body: JSON.stringify({ review_id: r.id, section, type: annType, text }),
+                            });
+                          }
+                        }} className="bg-purple-500 text-white text-sm px-3 py-1 rounded hover:bg-purple-600">✏️ 标注</button>
                       </div>
                     )}
                   </div>
@@ -344,6 +358,45 @@ export default function AdminPage() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Feedback */}
+          {section === "feedback" && feedbackStats && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">⭐ 教案反馈统计</h2>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="bg-white rounded-lg border p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-700">{feedbackStats.total_feedbacks || 0}</div>
+                  <div className="text-xs text-gray-500">总反馈数</div>
+                </div>
+                <div className="bg-white rounded-lg border p-4 text-center">
+                  <div className="text-2xl font-bold text-purple-700">{feedbackStats.avg_rating || 0}</div>
+                  <div className="text-xs text-gray-500">平均评分</div>
+                </div>
+              </div>
+              <h3 className="text-sm font-semibold text-gray-600 mb-2">评分分布</h3>
+              <div className="bg-white rounded-lg border p-4 mb-4">
+                {[5,4,3,2,1].map(s => {
+                  const count = feedbackStats.ratings?.[String(s)] || 0;
+                  const max = Math.max(1, ...Object.values(feedbackStats.ratings || {1:1}));
+                  return (
+                    <div key={s} className="flex items-center gap-2 mb-1">
+                      <span className="text-xs w-8">{s}星</span>
+                      <div className="flex-1 bg-gray-100 rounded h-4">
+                        <div className="bg-purple-400 rounded h-4" style={{ width: `${(count/max)*100}%` }} />
+                      </div>
+                      <span className="text-xs text-gray-500 w-8">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <h3 className="text-sm font-semibold text-gray-600 mb-2">高频标签</h3>
+              <div className="flex gap-2 flex-wrap">
+                {(feedbackStats.top_tags || []).map(([tag, count]: [string, number]) => (
+                  <span key={tag} className="bg-purple-50 text-purple-700 text-xs px-2 py-1 rounded-full">{tag} ({count})</span>
+                ))}
+              </div>
             </div>
           )}
 

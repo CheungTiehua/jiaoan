@@ -33,6 +33,8 @@ from collab import (
 from security import check_rate_limit
 from health import get_health
 from backup import create_backup, restore_backup
+from feedback import submit_feedback, get_feedback, get_stats as get_feedback_stats
+from annotation import add_annotation, get_annotations, get_stats as get_annotation_stats
 from fastapi import UploadFile, File as FastAPIFile, Form
 
 app = FastAPI(
@@ -429,6 +431,55 @@ async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
     from security import atomic_write
     atomic_write(PROMPTS_FILE, _json.dumps(cur, ensure_ascii=False, indent=2).encode())
     return {"ok": True, "message": "提示词已更新，立即生效"}
+
+
+# ---- 教案反馈 ----
+
+class FeedbackRequest(BaseModel):
+    plan_id: str
+    grade: str = ""
+    lesson: str = ""
+    rating: int = 0
+    useful_refs: list[str] = []
+    tags: list[str] = []
+    comment: str = ""
+
+@app.post("/api/feedback")
+async def api_feedback(req: FeedbackRequest, username: str = Depends(require_auth)):
+    return submit_feedback(username, req.plan_id, req.grade, req.lesson,
+                           req.rating, req.useful_refs, req.tags, req.comment)
+
+@app.get("/api/feedback/{plan_id}")
+async def api_get_feedback(plan_id: str):
+    fb = get_feedback(plan_id)
+    if not fb:
+        raise HTTPException(status_code=404, detail="无反馈记录")
+    return fb
+
+@app.get("/api/admin/feedback-stats")
+async def admin_feedback_stats(username: str = Depends(require_admin_or_reviewer)):
+    return get_feedback_stats()
+
+
+# ---- 段落标注 ----
+
+class AnnotationRequest(BaseModel):
+    review_id: str
+    section: str
+    type: str  # praise | improve | note
+    text: str
+
+@app.post("/api/admin/annotations")
+async def api_add_annotation(req: AnnotationRequest, username: str = Depends(require_admin_or_reviewer)):
+    return add_annotation(req.review_id, username, req.section, req.type, req.text)
+
+@app.get("/api/admin/annotations/{review_id}")
+async def api_get_annotations(review_id: str, username: str = Depends(require_admin_or_reviewer)):
+    return {"annotations": get_annotations(review_id)}
+
+@app.get("/api/admin/annotation-stats")
+async def admin_annotation_stats(username: str = Depends(require_admin_or_reviewer)):
+    return get_annotation_stats()
 
 
 if __name__ == "__main__":

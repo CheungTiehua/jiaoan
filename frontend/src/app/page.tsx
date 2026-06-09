@@ -22,6 +22,8 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
 
   const [lastPlanId, setLastPlanId] = useState<string>("");
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackRating, setFeedbackRating] = useState(0);
 
   // Unit plan
   const [unitName, setUnitName] = useState("");
@@ -492,6 +494,32 @@ export default function Home() {
                   <button onClick={() => setReflection("")} className="text-xs text-gray-400">✕</button>
                 </div>
                 <div className="prose prose-sm max-w-none"><ReactMarkdown remarkPlugins={[remarkGfm]}>{reflection}</ReactMarkdown></div>
+              </div>
+            )}
+
+            {/* Feedback */}
+            {lessonPlan && lastPlanId && (
+              <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-purple-800">⭐ 教案评分</h3>
+                    <p className="text-xs text-gray-500">评分会反哺检索系统，让后续推荐更精准</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[1,2,3,4,5].map(s => (
+                      <button key={s} onClick={async () => {
+                        setFeedbackRating(s);
+                        await fetch(`${API}/feedback`, {
+                          method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                          body: JSON.stringify({ plan_id: lastPlanId, grade, lesson, rating: s }),
+                        });
+                      }} className={`text-xl transition-colors ${feedbackRating >= s ? "text-purple-500" : "text-gray-300 hover:text-purple-300"}`}>
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {feedbackRating > 0 && <p className="text-xs text-purple-600 mt-2">已评分 {feedbackRating} 星，感谢反馈！</p>}
               </div>
             )}
 
