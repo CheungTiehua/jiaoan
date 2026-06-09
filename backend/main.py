@@ -1,5 +1,6 @@
 """LeKai v0.4 — 多用户 + 认证 + 历史"""
 
+import io
 import json as _json
 import sys
 import time as _time
@@ -555,6 +556,68 @@ async def api_get_annotations(review_id: str, username: str = Depends(require_ad
 @app.get("/api/admin/annotation-stats")
 async def admin_annotation_stats(username: str = Depends(require_admin_or_reviewer)):
     return get_annotation_stats()
+
+
+# ---- 教案导出 ----
+
+@app.get("/api/export/{plan_id}")
+async def export_plan(plan_id: str, format: str = "md", username: str = Depends(require_auth)):
+    """导出教案为 md / docx"""
+    from auth import get_history_detail
+    detail = get_history_detail(username, plan_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="教案不存在")
+
+    plan_text = detail.get("lesson_plan", "")
+    guide_text = detail.get("teaching_guide", "")
+    lesson = detail.get("lesson", "教案")
+    grade = detail.get("grade", "")
+
+    if format == "md":
+        full = plan_text
+        if guide_text:
+            full += "\n\n---\n\n" + guide_text
+        from fastapi.responses import Response
+        return Response(content=full.encode("utf-8"), media_type="text/markdown",
+                       headers={"Content-Disposition": f"attachment; filename={lesson}_教案.md"})
+
+    elif format == "docx":
+        from docx import Document
+        from docx.shared import Pt
+        doc = Document()
+        doc.styles["Normal"].font.size = Pt(11)
+        doc.add_heading(f"《{lesson}》教案", 0)
+        if grade:
+            doc.add_paragraph(f"年级：{grade}", style="Subtitle")
+
+        for line in plan_text.split("\n"):
+            if line.startswith("# "):
+                doc.add_heading(line[2:], 1)
+            elif line.startswith("## "):
+                doc.add_heading(line[3:], 2)
+            elif line.startswith("### "):
+                doc.add_heading(line[4:], 3)
+            elif line.strip():
+                doc.add_paragraph(line.strip())
+
+        if guide_text:
+            doc.add_page_break()
+            doc.add_heading("教案辅导说明", 1)
+            for line in guide_text.split("\n"):
+                if line.startswith("# "):
+                    doc.add_heading(line[2:], 1)
+                elif line.startswith("## "):
+                    doc.add_heading(line[3:], 2)
+                elif line.strip():
+                    doc.add_paragraph(line.strip())
+
+        buf = io.BytesIO()
+        doc.save(buf)
+        buf.seek(0)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                headers={"Content-Disposition": f"attachment; filename={lesson}_教案.docx"})
+
+    raise HTTPException(status_code=400, detail="仅支持 md / docx 格式")
 
 
 # ---- 教案入库（管理员上传教案文档） ----

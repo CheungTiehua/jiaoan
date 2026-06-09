@@ -610,6 +610,19 @@ export default function Home() {
               </div>
             )}
 
+            {/* Export */}
+            {lessonPlan && lastPlanId && (
+              <div className="bg-white rounded-xl shadow-sm border border-blue-100 p-4 mb-4">
+                <h3 className="text-sm font-semibold text-blue-800 mb-2">📥 导出教案</h3>
+                <div className="flex gap-2">
+                  <a href={`${API}/export/${lastPlanId}?format=md`} target="_blank"
+                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">下载 MD</a>
+                  <a href={`${API}/export/${lastPlanId}?format=docx`} target="_blank"
+                    className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">下载 DOCX</a>
+                </div>
+              </div>
+            )}
+
             {/* Feedback */}
             {lessonPlan && lastPlanId && (
               <div className="bg-white rounded-xl shadow-sm border border-purple-100 p-4 mb-4">
