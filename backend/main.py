@@ -1,6 +1,8 @@
 """LeKai v0.4 — 多用户 + 认证 + 历史"""
 
+import json as _json
 import sys
+import time as _time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -258,6 +260,7 @@ async def admin_approve(record_id: str, username: str = Depends(require_admin_or
 class ReviewRejectRequest(BaseModel):
     comment: str = ""
 
+
 @app.post("/api/admin/reviews/{record_id}/reject")
 async def admin_reject(record_id: str, req: ReviewRejectRequest = ReviewRejectRequest(), username: str = Depends(require_admin_or_reviewer)):
     ok = reject_review(record_id, username, req.comment)
@@ -417,10 +420,6 @@ async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
             cur[key] = str(req[key])[:5000]
     PROMPTS_FILE.write_text(_json.dumps(cur, ensure_ascii=False, indent=2))
     return {"ok": True, "message": "提示词已更新，立即生效"}
-
-
-import time as _time
-import json as _json
 
 
 if __name__ == "__main__":
