@@ -29,6 +29,14 @@ export default function AdminPage() {
   useEffect(() => {
     const t = localStorage.getItem("lekai_token") || "";
     setToken(t);
+    // 验证角色：非 admin/reviewer 重定向
+    if (t) {
+      fetch("/api/me", { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()).then(d => {
+        if (d.role && !["admin", "reviewer"].includes(d.role)) {
+          window.location.href = "/";
+        }
+      }).catch(() => {});
+    }
   }, []);
 
   const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
@@ -76,7 +84,7 @@ export default function AdminPage() {
       });
       if (!res.ok) { alert("保存失败"); return; }
       alert("提示词已保存，立即生效");
-    } catch { alert("网络错误，请重试"); }
+    } catch { console.error("admin API failed"); alert("网络错误，请重试"); }
   };
 
   const setUserRole = async () => {
@@ -87,7 +95,7 @@ export default function AdminPage() {
       if (!res.ok) { alert("设置失败"); return; }
       alert("角色已更新");
       loadDashboard();
-    } catch { alert("网络错误，请重试"); }
+    } catch { console.error("admin API failed"); alert("网络错误，请重试"); }
   };
 
   const doBackup = async () => {
@@ -101,7 +109,7 @@ export default function AdminPage() {
         a.click();
         URL.revokeObjectURL(url);
       }
-    } catch { alert("网络错误，请重试"); }
+    } catch { console.error("admin API failed"); alert("网络错误，请重试"); }
   };
 
   const SECTIONS: { key: Section; label: string; icon: string }[] = [
@@ -228,10 +236,10 @@ export default function AdminPage() {
                     {r.status === "pending" && (
                       <div className="flex gap-2">
                         <button onClick={async () => {
-                          try { await fetch(`${API}/admin/reviews/${r.id}/approve`, { method: "POST", headers }); loadDashboard(); } catch {}
+                          try { await fetch(`${API}/admin/reviews/${r.id}/approve`, { method: "POST", headers }); loadDashboard(); } catch { console.error("approve failed"); }
                         }} className="bg-green-500 text-white text-sm px-4 py-1 rounded hover:bg-green-600">通过</button>
                         <button onClick={async () => {
-                          try { await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers }); loadDashboard(); } catch {}
+                          try { await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers }); loadDashboard(); } catch { console.error("reject failed"); }
                         }} className="bg-red-500 text-white text-sm px-4 py-1 rounded hover:bg-red-600">打回</button>
                       </div>
                     )}

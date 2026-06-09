@@ -86,14 +86,16 @@ def run():
 
     # 保存
     outfile = EVAL_FILE.parent / "eval_results.json"
-    json.dump({
+    result_data = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "summary": {"total": total, "passed": passed, "warned": warned, "failed": failed,
                      "pass_rate": round(passed/total*100, 1) if total else 0},
         "by_category": {c: {"pass": s["pass"], "total": s["total"],
                             "rate": round(s["pass"]/s["total"]*100, 1)} for c, s in by_cat.items()},
         "results": results,
-    }, open(outfile, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    }
+    with open(outfile, "w", encoding="utf-8") as f:
+        json.dump(result_data, f, ensure_ascii=False, indent=2)
     print(f"\n  结果已保存: {outfile}")
 
 

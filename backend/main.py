@@ -71,11 +71,11 @@ class AuthRequest(BaseModel):
 
 
 class GenerateRequest(BaseModel):
-    grade: str = Field(..., json_schema_extra={"example": "三年级"})
-    lesson: str = Field(..., json_schema_extra={"example": "富饶的西沙群岛"})
-    requirements: str = Field(default="", json_schema_extra={"example": "重点修辞手法"})
-    class_hours: str = Field(default="2", json_schema_extra={"example": "2"})
-    semester: str = Field(default="上", json_schema_extra={"example": "上"})
+    grade: str = Field(..., max_length=20, json_schema_extra={"example": "三年级"})
+    lesson: str = Field(..., max_length=100, json_schema_extra={"example": "富饶的西沙群岛"})
+    requirements: str = Field(default="", max_length=500, json_schema_extra={"example": "重点修辞手法"})
+    class_hours: str = Field(default="2", max_length=5)
+    semester: str = Field(default="上", max_length=5)
 
 
 class GenerateResponse(BaseModel):
@@ -150,9 +150,13 @@ async def logout(authorization: str = Header(default="")):
 
 
 @app.get("/api/me")
-async def me(username: str = Header(default="", alias="X-Username")):
-    # 这个接口由前端通过 token 解析后调用
-    return {"username": username or "未登录"}
+async def me(authorization: str = Header(default="")):
+    if authorization.startswith("Bearer "):
+        username = get_user_from_token(authorization[len("Bearer "):])
+        if username:
+            role = get_user_role(username)
+            return {"username": username, "role": role}
+    return {"username": "", "role": ""}
 
 
 # ---- Protected API ----
