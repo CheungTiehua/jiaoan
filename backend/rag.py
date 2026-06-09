@@ -42,17 +42,25 @@ def _get_api_key() -> str:
         return k
 
 
-# 加载在线自定义 Prompt（管理员可修改）
+# 加载在线自定义 Prompt（管理员可修改，缓存+mtime检测）
+import os as _os
 PROMPTS_FILE = Path(__file__).resolve().parent.parent / "data" / ".system_prompts"
+_prompt_cache: dict = {}
+_prompt_mtime: float = 0
 
 
 def _load_custom_prompt(key: str) -> str | None:
+    global _prompt_cache, _prompt_mtime
     if PROMPTS_FILE.exists():
-        try:
-            import json
-            return json.loads(PROMPTS_FILE.read_text()).get(key)
-        except Exception:
-            pass
+        mtime = _os.path.getmtime(PROMPTS_FILE)
+        if mtime != _prompt_mtime:
+            try:
+                import json
+                _prompt_cache = json.loads(PROMPTS_FILE.read_text())
+                _prompt_mtime = mtime
+            except Exception:
+                _prompt_cache = {}
+        return _prompt_cache.get(key)
     return None
 
 
@@ -73,6 +81,10 @@ def call_deepseek(system_prompt: str, user_prompt: str, temperature: float = 0.3
         {"role": "user", "content": user_prompt}
     ], "temperature": temperature, "max_tokens": 4096}
     resp = requests.post(f"{DEEPSEEK_BASE_URL}/v1/chat/completions", headers=headers, json=payload, timeout=180)
+    if resp.status_code == 429:
+        raise RuntimeError("API 请求过于频繁，请稍后重试")
+    if resp.status_code == 401 or resp.status_code == 403:
+        raise RuntimeError("API Key 无效或已过期")
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 

@@ -36,7 +36,7 @@ def submit_feedback(
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
 
-    filepath = FEEDBACK_DIR / f"{plan_id}.json"
+    filepath = FEEDBACK_DIR / f"{username}_{plan_id}.json"
     from security import atomic_write
     atomic_write(filepath, json.dumps(record, ensure_ascii=False, indent=2).encode())
 
@@ -48,11 +48,11 @@ def submit_feedback(
 
 
 def get_feedback(plan_id: str) -> dict | None:
-    """获取教案反馈"""
-    filepath = FEEDBACK_DIR / f"{plan_id}.json"
-    if filepath.exists():
+    """获取教案反馈（返回最新一条）"""
+    matches = sorted(FEEDBACK_DIR.glob(f"*_{plan_id}.json"), reverse=True)
+    for f in matches:
         try:
-            return json.loads(filepath.read_text())
+            return json.loads(f.read_text())
         except Exception:
             pass
     return None

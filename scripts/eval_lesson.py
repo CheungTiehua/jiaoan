@@ -31,6 +31,8 @@ def run():
             result = generate_lesson(q["grade"], q["lesson"], q.get("req", ""), "2", "上")
         except Exception as e:
             print(f"  ❌ {q['id']} 生成失败: {e}")
+            results.append({"id": q["id"], "category": q["category"], "status": "❌",
+                           "lesson": q["lesson"], "scores": {"overall": 0}, "elapsed_ms": 0})
             continue
 
         elapsed = int((time.time() - t0) * 1000)
@@ -58,7 +60,8 @@ def run():
             "overall": round((completeness + goal_quality + operability + coverage) / 4 * 100),
         }
         passed = scores["overall"] >= 60
-        status = "✅" if passed else "⚠️"
+        has_plan = completeness > 0.2
+        status = "✅" if passed else ("⚠️" if has_plan else "❌")
 
         r = {
             "id": q["id"], "category": q["category"], "status": status,

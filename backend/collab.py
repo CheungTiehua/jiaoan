@@ -22,7 +22,7 @@ class _GroupsCtx:
         self.data = {}
 
     def __enter__(self):
-        self.fd = open(_lock_file, "w")
+        self.fd = open(_lock_file, "a")
         fcntl.flock(self.fd, fcntl.LOCK_EX)
         if GROUPS_FILE.exists():
             try:

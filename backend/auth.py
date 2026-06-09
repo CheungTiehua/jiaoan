@@ -84,6 +84,7 @@ def save_sessions(sessions: dict):
     now = time.time()
     sessions = {k: v for k, v in sessions.items() if v.get("expires_at", 0) > now}
     atomic_write(SESSIONS_FILE, json.dumps(sessions, ensure_ascii=False, indent=2).encode())
+    SESSIONS_FILE.chmod(0o600)
 
 
 def register_user(username: str, password: str) -> tuple[bool, str]:
