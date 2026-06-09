@@ -82,13 +82,3 @@ def restore_backup(file_data: bytes) -> tuple[bool, str]:
         return False, "备份文件损坏"
     except Exception as e:
         return False, f"恢复失败: {str(e)}"
-
-
-def mirror_upload(username: str, filename: str, filepath: Path):
-    """防离岗备份：上传文件时自动镜像到 _backup/"""
-    try:
-        dest_dir = BACKUP_DIR / username / "uploads"
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(str(filepath), str(dest_dir / filename))
-    except Exception:
-        pass  # 镜像失败不影响主流程

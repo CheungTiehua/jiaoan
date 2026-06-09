@@ -1,41 +1,8 @@
-"""
-LeKai 安全模块 — 速率限制 + HMAC签名 + 原子写入
-借鉴 zhishiku 的安全加固模式
-"""
+"""LeKai 安全模块 — 速率限制 + 原子写入"""
 
-import hashlib
-import hmac
-import os
+import threading
 import time
 from pathlib import Path
-
-# HMAC Key（用于索引签名，服务重启后不变）
-HMAC_KEY_FILE = Path(__file__).resolve().parent.parent / "data" / ".hmac_key"
-HMAC_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-if HMAC_KEY_FILE.exists():
-    HMAC_KEY = HMAC_KEY_FILE.read_bytes()
-else:
-    HMAC_KEY = os.urandom(32)
-    HMAC_KEY_FILE.write_bytes(HMAC_KEY)
-    HMAC_KEY_FILE.chmod(0o600)
-
-
-def sign_data(data: bytes) -> bytes:
-    """HMAC-SHA256 签名，返回 signature + data"""
-    sig = hmac.digest(HMAC_KEY, data, "sha256")
-    return sig + data
-
-
-def verify_and_load(data: bytes) -> bytes | None:
-    """验证 HMAC 签名后返回原始数据，签名无效返回 None"""
-    if len(data) < 32:
-        return None
-    sig, payload = data[:32], data[32:]
-    expected = hmac.digest(HMAC_KEY, payload, "sha256")
-    if hmac.compare_digest(sig, expected):
-        return payload
-    return None
 
 
 def atomic_write(filepath: Path, data: bytes):
@@ -47,8 +14,6 @@ def atomic_write(filepath: Path, data: bytes):
 
 # ---- 速率限制 ----
 
-import threading
-
 _rate_store: dict[str, tuple[int, float]] = {}
 _rate_lock = threading.Lock()
 
@@ -56,7 +21,6 @@ def check_rate_limit(key: str, max_attempts: int = 10, window_sec: int = 60) -> 
     """滑动窗口速率限制（线程安全），返回 True 表示被限流"""
     now = time.time()
     with _rate_lock:
-        # 定期清理过期记录（每1000次调用触发一次）
         if len(_rate_store) > 1000:
             expired = [k for k, (_, last) in _rate_store.items() if now - last > window_sec * 2]
             for k in expired:
