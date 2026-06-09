@@ -47,8 +47,8 @@ def submit_for_review(username: str, record_id: str) -> bool:
         "reviewer": "",
         "review_time": "",
         "comment": "",
-        "lesson_plan": detail.get("lesson_plan", "")[:2000],
-        "teaching_guide": detail.get("teaching_guide", "")[:1000],
+        "lesson_plan": detail.get("lesson_plan", ""),
+        "teaching_guide": detail.get("teaching_guide", ""),
     }
     filepath = REVIEWS_DIR / f"{_safe_id(record_id)}.json"
     atomic_write(filepath, json.dumps(review, ensure_ascii=False, indent=2).encode())

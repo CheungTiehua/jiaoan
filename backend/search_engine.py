@@ -125,7 +125,6 @@ def search_hybrid(
             vec_rank[cid] = 1.0 / (60 + rank + 1)
 
     bm25_rank = {}
-    bm25_max = max(bm25_scores.values()) if bm25_scores else 1.0
     if bm25_scores:
         sorted_bm25 = sorted(bm25_scores.items(), key=lambda x: x[1], reverse=True)
         for rank, (cid, _) in enumerate(sorted_bm25):

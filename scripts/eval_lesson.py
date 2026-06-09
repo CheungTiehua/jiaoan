@@ -93,7 +93,7 @@ def run():
         "by_category": {c: {"pass": s["pass"], "total": s["total"],
                             "rate": round(s["pass"]/s["total"]*100, 1)} for c, s in by_cat.items()},
         "results": results,
-    }, open(outfile, "w"), ensure_ascii=False, indent=2)
+    }, open(outfile, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
     print(f"\n  结果已保存: {outfile}")
 
 
