@@ -31,6 +31,7 @@ from collab import (
     share_plan, get_group_plans, assign_task, get_group_tasks,
     complete_task, add_comment,
 )
+from config import VERSION
 from security import check_rate_limit
 from health import get_health
 from backup import create_backup, restore_backup
@@ -586,13 +587,13 @@ async def evaluate_plan(file: UploadFile = FastAPIFile(...), username: str = Dep
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="文件不能超过5MB")
 
-    # 解析文档内容（docx 用 python-docx 提取，md/txt 直接读）
+    # 解析文档内容（复用已读取的 data 变量）
     if ext == ".docx":
         from docx import Document as DocxDoc
-        doc = DocxDoc(io.BytesIO(await file.read()))
+        doc = DocxDoc(io.BytesIO(data))
         content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
     else:
-        content = (await file.read()).decode("utf-8", errors="ignore")
+        content = data.decode("utf-8", errors="ignore")
 
     if len(content) < 200:
         raise HTTPException(status_code=400, detail="教案内容过短，至少200字符")
@@ -697,13 +698,13 @@ async def admin_upload_lesson(
     if len(data) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="文件不能超过5MB")
 
-    # 解析文档内容
+    # 解析文档内容（复用已读取的 data 变量）
     if ext == ".docx":
         from docx import Document as DocxDoc
-        doc = DocxDoc(io.BytesIO(await file.read()))
+        doc = DocxDoc(io.BytesIO(data))
         content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
     else:
-        content = (await file.read()).decode("utf-8", errors="ignore")
+        content = data.decode("utf-8", errors="ignore")
 
     if len(content) < 100:
         raise HTTPException(status_code=400, detail="文档内容过短（至少100字符）")
