@@ -47,12 +47,24 @@ def load_users() -> dict:
         try:
             return json.loads(USERS_FILE.read_text())
         except json.JSONDecodeError:
-            pass
+            import logging
+            logging.getLogger("lekai").error("users.json 损坏！从备份恢复")
+            # 尝试从 .bak 恢复
+            bak = USERS_FILE.with_suffix(".json.bak")
+            if bak.exists():
+                try:
+                    return json.loads(bak.read_text())
+                except Exception:
+                    pass
     return {}
 
 
 def save_users(users: dict):
     from security import atomic_write
+    # 写入前先备份
+    if USERS_FILE.exists():
+        import shutil
+        shutil.copy2(USERS_FILE, USERS_FILE.with_suffix(".json.bak"))
     atomic_write(USERS_FILE, json.dumps(users, ensure_ascii=False, indent=2).encode())
     USERS_FILE.chmod(0o600)
 
@@ -62,7 +74,8 @@ def load_sessions() -> dict:
         try:
             return json.loads(SESSIONS_FILE.read_text())
         except json.JSONDecodeError:
-            pass
+            import logging
+            logging.getLogger("lekai").warning("sessions.json 损坏，重新初始化")
     return {}
 
 

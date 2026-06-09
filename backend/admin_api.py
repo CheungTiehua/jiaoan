@@ -187,9 +187,17 @@ def set_user_role(username: str, role: str) -> bool:
     """设置用户角色: teacher / reviewer / admin"""
     if role not in ("teacher", "reviewer", "admin"):
         return False
-    users = load_users()
-    if username not in users:
-        return False
-    users[username]["role"] = role
-    save_users(users)
-    return True
+    import fcntl
+    from pathlib import Path as _P
+    lock_file = _P(__file__).resolve().parent.parent / "data" / "users.lock"
+    with open(lock_file, "w") as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        try:
+            users = load_users()
+            if username not in users:
+                return False
+            users[username]["role"] = role
+            save_users(users)
+            return True
+        finally:
+            fcntl.flock(lf, fcntl.LOCK_UN)

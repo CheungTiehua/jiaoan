@@ -413,8 +413,12 @@ async def admin_get_prompts(username: str = Depends(require_admin_or_reviewer)):
 
 @app.post("/api/admin/prompts")
 async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
-    import json as _json
-    cur = _json.loads(PROMPTS_FILE.read_text()) if PROMPTS_FILE.exists() else {}
+    cur = {}
+    if PROMPTS_FILE.exists():
+        try:
+            cur = _json.loads(PROMPTS_FILE.read_text())
+        except Exception:
+            pass
     for key in ("chat_prompt", "audit_prompt"):
         if key in req:
             cur[key] = str(req[key])[:5000]
