@@ -28,6 +28,9 @@ class _GroupsCtx:
             try:
                 self.data = json.loads(GROUPS_FILE.read_text())
             except json.JSONDecodeError:
+                import logging, shutil
+                logging.getLogger("lekai").error("groups.json 损坏！已备份")
+                shutil.copy2(GROUPS_FILE, GROUPS_FILE.with_suffix(".json.bak"))
                 self.data = {}
         return self.data
 

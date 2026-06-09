@@ -28,7 +28,8 @@ def run():
     for i, q in enumerate(questions):
         t0 = time.time()
         try:
-            result = generate_lesson(q["grade"], q["lesson"], q.get("req", ""), "2", "上")
+            result = generate_lesson(q["grade"], q["lesson"], q.get("req", ""),
+                                     q.get("class_hours", "2"), q.get("semester", "上"))
         except Exception as e:
             print(f"  ❌ {q['id']} 生成失败: {e}")
             results.append({"id": q["id"], "category": q["category"], "status": "❌",
