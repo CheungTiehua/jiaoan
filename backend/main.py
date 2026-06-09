@@ -46,7 +46,7 @@ app = FastAPI(
 )
 
 import os as _os
-_cors_origins = _os.getenv("LEKAI_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
+_cors_origins = [o.strip() for o in _os.getenv("LEKAI_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins, allow_credentials=True,
@@ -130,7 +130,14 @@ async def setup_complete(req: dict):
 
     # 持久化 API Key：同时写 .env 和 data/api_key.json
     env_file = Path(__file__).resolve().parent.parent / ".env"
-    env_file.write_text(f"DEEPSEEK_API_KEY={api_key}\n")
+    # 保留现有 .env 中的其他配置
+    existing = ""
+    if env_file.exists():
+        lines = env_file.read_text().split("\n")
+        existing = "\n".join(l for l in lines if not l.startswith("DEEPSEEK_API_KEY=") and l.strip())
+        if existing:
+            existing += "\n"
+    env_file.write_text(existing + f"DEEPSEEK_API_KEY={api_key}\n")
     env_file.chmod(0o600)
 
     import json as _j

@@ -44,7 +44,7 @@ def create_backup() -> io.BytesIO:
         if env_file.exists():
             env_content = env_file.read_text()
             masked = "\n".join(
-                l if not l.startswith("DEEPSEEK_API_KEY=") else "DEEPSEEK_API_KEY=***masked***"
+                l if not l.strip().startswith("DEEPSEEK_API_KEY=") else "DEEPSEEK_API_KEY=***masked***"
                 for l in env_content.split("\n")
             )
             zf.writestr("config.env.example", masked)

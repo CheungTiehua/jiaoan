@@ -66,6 +66,8 @@ def get_stats() -> dict:
             for ann in json.loads(f.read_text()):
                 sec = ann.get("section", "其他")
                 tp = ann.get("type", "note")
+                if tp not in ("praise", "improve", "note"):
+                    tp = "note"
                 if sec in stats:
                     stats[sec][tp] += 1
         except Exception:
