@@ -39,6 +39,7 @@ export default function AdminPage() {
       fetch(`${API}/admin/reviews`, { headers }).then(r => r.json()),
     ]);
     setDashboard(dr); setReviews(rr.reviews || []);
+    return dr;  // 返回值供调用方直接使用
   };
 
   const loadHealth = async () => {
@@ -63,8 +64,8 @@ export default function AdminPage() {
     if (section === "dashboard" || section === "reviews") loadDashboard();
     if (section === "health") loadHealth();
     if (section === "prompts") loadPrompts();
-    if (section === "roles") loadDashboard().then(() => {
-      if (dashboard?.teacher_summary) setUsers(dashboard.teacher_summary);
+    if (section === "roles") loadDashboard().then((dr) => {
+      if (dr?.teacher_summary) setUsers(dr.teacher_summary);
     });
   }, [section, token]);
 

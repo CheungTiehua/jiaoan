@@ -402,7 +402,7 @@ PROMPTS_FILE = Path(__file__).resolve().parent.parent / "data" / ".system_prompt
 async def admin_get_prompts(username: str = Depends(require_admin_or_reviewer)):
     if PROMPTS_FILE.exists():
         try:
-            return json.loads(PROMPTS_FILE.read_text())
+            return _json.loads(PROMPTS_FILE.read_text())
         except Exception:
             pass
     return {"chat_prompt": "", "audit_prompt": ""}
