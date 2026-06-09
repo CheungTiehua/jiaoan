@@ -70,16 +70,18 @@ export default function AdminPage() {
   }, [section, token]);
 
   const savePrompts = async () => {
-    await fetch(`${API}/admin/prompts`, {
+    const res = await fetch(`${API}/admin/prompts`, {
       method: "POST", headers, body: JSON.stringify({ chat_prompt: chatPrompt, audit_prompt: auditPrompt }),
     });
+    if (!res.ok) { alert("保存失败"); return; }
     alert("提示词已保存，立即生效");
   };
 
   const setUserRole = async () => {
-    await fetch(`${API}/admin/users/set-role`, {
+    const res = await fetch(`${API}/admin/users/set-role`, {
       method: "POST", headers, body: JSON.stringify({ username: selectedUser, role: selectedRole }),
     });
+    if (!res.ok) { alert("设置失败"); return; }
     alert("角色已更新");
     loadDashboard();
   };
