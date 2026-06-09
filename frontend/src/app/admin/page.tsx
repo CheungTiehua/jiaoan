@@ -70,32 +70,38 @@ export default function AdminPage() {
   }, [section, token]);
 
   const savePrompts = async () => {
-    const res = await fetch(`${API}/admin/prompts`, {
-      method: "POST", headers, body: JSON.stringify({ chat_prompt: chatPrompt, audit_prompt: auditPrompt }),
-    });
-    if (!res.ok) { alert("保存失败"); return; }
-    alert("提示词已保存，立即生效");
+    try {
+      const res = await fetch(`${API}/admin/prompts`, {
+        method: "POST", headers, body: JSON.stringify({ chat_prompt: chatPrompt, audit_prompt: auditPrompt }),
+      });
+      if (!res.ok) { alert("保存失败"); return; }
+      alert("提示词已保存，立即生效");
+    } catch { alert("网络错误，请重试"); }
   };
 
   const setUserRole = async () => {
-    const res = await fetch(`${API}/admin/users/set-role`, {
-      method: "POST", headers, body: JSON.stringify({ username: selectedUser, role: selectedRole }),
-    });
-    if (!res.ok) { alert("设置失败"); return; }
-    alert("角色已更新");
-    loadDashboard();
+    try {
+      const res = await fetch(`${API}/admin/users/set-role`, {
+        method: "POST", headers, body: JSON.stringify({ username: selectedUser, role: selectedRole }),
+      });
+      if (!res.ok) { alert("设置失败"); return; }
+      alert("角色已更新");
+      loadDashboard();
+    } catch { alert("网络错误，请重试"); }
   };
 
   const doBackup = async () => {
-    const res = await fetch(`${API}/admin/backup`, { method: "POST", headers });
-    if (res.ok) {
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `lekai_backup_${new Date().toISOString().slice(0, 10)}.zip`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+    try {
+      const res = await fetch(`${API}/admin/backup`, { method: "POST", headers });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `lekai_backup_${new Date().toISOString().slice(0, 10)}.zip`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch { alert("网络错误，请重试"); }
   };
 
   const SECTIONS: { key: Section; label: string; icon: string }[] = [
@@ -222,12 +228,10 @@ export default function AdminPage() {
                     {r.status === "pending" && (
                       <div className="flex gap-2">
                         <button onClick={async () => {
-                          await fetch(`${API}/admin/reviews/${r.id}/approve`, { method: "POST", headers });
-                          loadDashboard();
+                          try { await fetch(`${API}/admin/reviews/${r.id}/approve`, { method: "POST", headers }); loadDashboard(); } catch {}
                         }} className="bg-green-500 text-white text-sm px-4 py-1 rounded hover:bg-green-600">通过</button>
                         <button onClick={async () => {
-                          await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers });
-                          loadDashboard();
+                          try { await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers }); loadDashboard(); } catch {}
                         }} className="bg-red-500 text-white text-sm px-4 py-1 rounded hover:bg-red-600">打回</button>
                       </div>
                     )}
