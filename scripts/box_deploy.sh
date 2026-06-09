@@ -25,7 +25,14 @@ fi
 # 1. 系统依赖
 echo "[1/6] 安装系统依赖..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-pip python3-venv nginx curl nodejs npm
+apt-get install -y -qq python3 python3-pip python3-venv nginx curl nodejs npm avahi-daemon
+
+# mDNS 主机名：网管老师在浏览器输入 lekai.local 即可访问
+echo "lekai" > /etc/hostname
+hostname lekai
+sed -i 's/^#host-name=.*/host-name=lekai/' /etc/avahi/avahi-daemon.conf 2>/dev/null || true
+systemctl enable avahi-daemon
+systemctl restart avahi-daemon
 
 # 2. 目录结构
 echo "[2/6] 创建目录..."
@@ -166,7 +173,11 @@ systemctl start $SERVICE_BACKEND $SERVICE_FRONTEND
 echo ""
 echo "========================================"
 echo "  部署完成！"
-echo "  访问: http://\$(hostname -I | awk '{print \$1}')"
+echo ""
+echo "  访问方式:"
+echo "    浏览器打开 http://lekai.local"
+echo "    （若打不开，请查看路由器DHCP列表获取盒子IP）"
+echo ""
 echo "  状态: systemctl status $SERVICE_BACKEND $SERVICE_FRONTEND nginx"
 echo "  日志: journalctl -u $SERVICE_BACKEND -f"
 echo "========================================"
