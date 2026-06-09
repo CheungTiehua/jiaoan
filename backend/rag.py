@@ -59,6 +59,14 @@ def _load_custom_prompt(key: str) -> str | None:
 def call_deepseek(system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
     if not _keys:
         raise RuntimeError("请设置 DEEPSEEK_API_KEY")
+    # 在线自定义 Prompt 覆盖（管理员可修改，立即生效）
+    custom = _load_custom_prompt("system_override")
+    if custom:
+        system_prompt = custom
+    custom_user = _load_custom_prompt("user_override")
+    if custom_user:
+        user_prompt = custom_user.format(user_prompt=user_prompt) if "{user_prompt}" in custom_user else custom_user
+
     headers = {"Authorization": f"Bearer {_get_api_key()}", "Content-Type": "application/json"}
     payload = {"model": DEEPSEEK_MODEL, "messages": [
         {"role": "system", "content": system_prompt},
@@ -90,23 +98,23 @@ def generate_lesson(
     grade: str, lesson: str,
     requirements: str = "", class_hours: str = "2", semester: str = "上"
 ) -> dict:
-    """Step 1: 考点分析 → Step 2: 结构化同行参考 → Step 3: 教案 → Step 4: 辅导说明"""
 
-    # 0. 混合检索 + Evidence Pack
     search_query = f"{grade} {semester}学期 《{lesson}》{requirements}"
     context, evidence_pack = retrieve_structured(search_query, grade=grade)
 
-    # 1. 考点分析
+    # Step 1 + Step 2 并行执行（无数据依赖）
+    from concurrent.futures import ThreadPoolExecutor
     exam_prompt = EXAM_ANALYSIS_USER.format(grade=grade, lesson=lesson, semester=semester)
-    exam_analysis = call_deepseek(EXAM_ANALYSIS_SYSTEM, exam_prompt, temperature=0.2)
-
-    # 2. 结构化同行参考
     peer_prompt = PEER_ANALYSIS_STRUCTURED_USER.format(
         grade=grade, lesson=lesson, semester=semester, context=context
     )
-    peer_analysis = call_deepseek(PEER_ANALYSIS_STRUCTURED_SYSTEM, peer_prompt, temperature=0.3)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        exam_future = pool.submit(call_deepseek, EXAM_ANALYSIS_SYSTEM, exam_prompt, 0.2)
+        peer_future = pool.submit(call_deepseek, PEER_ANALYSIS_STRUCTURED_SYSTEM, peer_prompt, 0.3)
+        exam_analysis = exam_future.result()
+        peer_analysis = peer_future.result()
 
-    # 3. 教案生成
+    # Step 3: 教案生成（依赖 Step 1+2）
     plan_prompt = LESSON_PLAN_USER.format(
         exam_analysis=exam_analysis, peer_analysis=peer_analysis,
         context=context, grade=grade, lesson=lesson,
@@ -114,7 +122,7 @@ def generate_lesson(
     )
     lesson_plan = call_deepseek(LESSON_PLAN_SYSTEM, plan_prompt)
 
-    # 4. 辅导说明
+    # Step 4: 辅导说明
     guide_prompt = TEACHING_GUIDE_USER.format(
         lesson_plan=lesson_plan, exam_analysis=exam_analysis,
         peer_analysis=peer_analysis, lesson=lesson

@@ -31,6 +31,7 @@ from collab import (
 from security import check_rate_limit
 from health import get_health
 from backup import create_backup, restore_backup
+from fastapi import UploadFile, File as FastAPIFile, Form
 
 app = FastAPI(
     title="LeKai教案知识库 API",
@@ -38,9 +39,11 @@ app = FastAPI(
     version="0.4.0"
 )
 
+import os as _os
+_cors_origins = _os.getenv("LEKAI_CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
+    allow_origins=_cors_origins, allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
 
@@ -166,9 +169,11 @@ async def generate(req: GenerateRequest, username: str = Depends(require_auth)):
         result["record_id"] = record_id
         return GenerateResponse(**result)
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="API Key 未配置")
+    except Exception:
+        import traceback, logging
+        logging.getLogger("lekai").error("生成失败:\n%s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="生成失败，请稍后重试")
 
 
 @app.post("/api/revise", response_model=ReviseResponse)
@@ -179,7 +184,7 @@ async def revise(req: ReviseRequest, username: str = Depends(require_auth)):
         new_plan = revise_lesson(req.current_plan, req.revision_request, req.history)
         return ReviseResponse(lesson_plan=new_plan)
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="服务器错误，请稍后重试")
 
 
 @app.get("/api/history")
@@ -191,16 +196,11 @@ async def history(username: str = Depends(require_auth)):
 
 
 @app.get("/api/history/{record_id}")
-async def history_detail(record_id: str):
-    """获取单条历史详情（暂不需认证，通过 id 访问）"""
-    # 从任意用户目录查找
-    from auth import HISTORY_DIR
-    for user_dir in HISTORY_DIR.iterdir():
-        if user_dir.is_dir():
-            detail = get_history_detail(user_dir.name, record_id)
-            if detail:
-                return detail
-    raise HTTPException(status_code=404, detail="记录不存在")
+async def history_detail(record_id: str, username: str = Depends(require_auth)):
+    detail = get_history_detail(username, record_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return detail
 
 
 # ---- Review API ----
@@ -251,11 +251,12 @@ async def admin_approve(record_id: str, username: str = Depends(require_admin_or
         raise HTTPException(status_code=404, detail="审核记录不存在")
     return {"message": "已批准"}
 
+class ReviewRejectRequest(BaseModel):
+    comment: str = ""
+
 @app.post("/api/admin/reviews/{record_id}/reject")
-async def admin_reject(record_id: str, username: str = Depends(require_admin_or_reviewer)):
-    # 从 query 参数获取打回意见
-    from fastapi import Query
-    ok = reject_review(record_id, username, "")
+async def admin_reject(record_id: str, req: ReviewRejectRequest = ReviewRejectRequest(), username: str = Depends(require_admin_or_reviewer)):
+    ok = reject_review(record_id, username, req.comment)
     if not ok:
         raise HTTPException(status_code=404, detail="审核记录不存在")
     return {"message": "已打回"}
@@ -283,7 +284,7 @@ async def unit_plan(req: UnitPlanRequest, username: str = Depends(require_auth))
         result = generate_unit_plan(req.grade, req.unit, req.semester)
         return {"unit_plan": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="生成失败，请稍后重试")
 
 
 # ---- 教研协作 API ----
@@ -358,7 +359,7 @@ async def reflect(req: ReflectionRequest, username: str = Depends(require_auth))
         result = generate_reflection(req.lesson, req.lesson_plan)
         return {"reflection": result}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"生成失败: {str(e)}")
+        raise HTTPException(status_code=500, detail="生成失败，请稍后重试")
 
 
 # ---- 健康检查 ----
@@ -380,10 +381,12 @@ async def admin_backup(username: str = Depends(require_admin)):
 
 
 @app.post("/api/admin/restore")
-async def admin_restore(username: str = Depends(require_admin)):
-    from fastapi import UploadFile, File
-    # 通过 request 获取上传文件
-    return {"error": "请使用 multipart/form-data 上传备份文件"}
+async def admin_restore(file: UploadFile = FastAPIFile(...), username: str = Depends(require_admin)):
+    data = await file.read()
+    ok, msg = restore_backup(data)
+    if not ok:
+        raise HTTPException(status_code=400, detail=msg)
+    return {"ok": True, "message": msg}
 
 
 # ---- Prompt 在线配置 ----

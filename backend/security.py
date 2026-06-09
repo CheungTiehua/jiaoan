@@ -47,19 +47,23 @@ def atomic_write(filepath: Path, data: bytes):
 
 # ---- 速率限制 ----
 
-_rate_store: dict[str, tuple[int, float]] = {}  # key -> (count, timestamp)
+import threading
+
+_rate_store: dict[str, tuple[int, float]] = {}
+_rate_lock = threading.Lock()
 
 def check_rate_limit(key: str, max_attempts: int = 10, window_sec: int = 60) -> bool:
-    """滑动窗口速率限制，返回 True 表示被限流"""
+    """滑动窗口速率限制（线程安全），返回 True 表示被限流"""
     now = time.time()
-    if key in _rate_store:
-        cnt, last = _rate_store[key]
-        if now - last > window_sec:
-            _rate_store[key] = (1, now)
-        elif cnt >= max_attempts:
-            return True
+    with _rate_lock:
+        if key in _rate_store:
+            cnt, last = _rate_store[key]
+            if now - last > window_sec:
+                _rate_store[key] = (1, now)
+            elif cnt >= max_attempts:
+                return True
+            else:
+                _rate_store[key] = (cnt + 1, now)
         else:
-            _rate_store[key] = (cnt + 1, now)
-    else:
-        _rate_store[key] = (1, now)
-    return False
+            _rate_store[key] = (1, now)
+        return False

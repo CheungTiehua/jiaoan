@@ -2,6 +2,7 @@
 LeKai 教研协作 — 教研组 + 共享教案 + 集体备课
 """
 
+import fcntl
 import json
 import time
 from pathlib import Path
@@ -11,18 +12,44 @@ COLLAB_DIR = PROJECT_ROOT / "data" / "collab"
 GROUPS_FILE = COLLAB_DIR / "groups.json"
 COLLAB_DIR.mkdir(parents=True, exist_ok=True)
 
+_lock_fd = None
+
+
+def _acquire_lock():
+    global _lock_fd
+    lock_file = COLLAB_DIR / ".lock"
+    _lock_fd = open(lock_file, "w")
+    fcntl.flock(_lock_fd, fcntl.LOCK_EX)
+
+
+def _release_lock():
+    global _lock_fd
+    if _lock_fd:
+        fcntl.flock(_lock_fd, fcntl.LOCK_UN)
+        _lock_fd.close()
+        _lock_fd = None
+
 
 def _load_groups() -> dict:
-    if GROUPS_FILE.exists():
-        try:
-            return json.loads(GROUPS_FILE.read_text())
-        except json.JSONDecodeError:
-            pass
-    return {}
+    _acquire_lock()
+    try:
+        if GROUPS_FILE.exists():
+            try:
+                return json.loads(GROUPS_FILE.read_text())
+            except json.JSONDecodeError:
+                pass
+        return {}
+    finally:
+        _release_lock()
 
 
 def _save_groups(data: dict):
-    GROUPS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    _acquire_lock()
+    try:
+        from security import atomic_write
+        atomic_write(GROUPS_FILE, json.dumps(data, ensure_ascii=False, indent=2).encode())
+    finally:
+        _release_lock()
 
 
 # ---- 教研组管理 ----

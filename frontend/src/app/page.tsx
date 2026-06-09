@@ -77,7 +77,9 @@ export default function Home() {
 
   // Load textbooks
   useEffect(() => {
-    fetch(`${API}/textbooks`).then(r => r.json()).then(d => setTextbooks(d.textbooks || [])).catch(() => {});
+    const ctrl = new AbortController();
+    fetch(`${API}/textbooks`, { signal: ctrl.signal }).then(r => r.json()).then(d => setTextbooks(d.textbooks || [])).catch(() => {});
+    return () => ctrl.abort();
   }, []);
 
   // Auth handlers
