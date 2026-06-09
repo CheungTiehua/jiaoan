@@ -191,17 +191,20 @@ echo "$BACKUP_TOKEN" > $APP_DIR/.backup_token
 chmod 600 $APP_DIR/.backup_token
 chown $APP_USER:$APP_USER $APP_DIR/.backup_token
 
-# 将 token 注入 auth 系统（重启后生效）
+# 将 token 注入 auth 系统（备份专用账号，无过期）
 python3 -c "
-import json, os
+import json, os, sys
+sys.path.insert(0, '$APP_DIR')
+sys.path.insert(0, '$APP_DIR/backend')
 tf = '$APP_DIR/.backup_token'
 if os.path.exists(tf):
     tok = open(tf).read().strip()
-    # 将 backup token 作为系统级 session 写入
-    sessions_file = '$APP_DIR/data/sessions.json'
-    sessions = {}
-    import sys; sys.path.insert(0, '$APP_DIR')
-    from auth import load_sessions, save_sessions
+    # 注册 system 用户（备份专用）+ 创建永久 session
+    from auth import load_users, save_users, register_user, load_sessions, save_sessions
+    users = load_users()
+    if 'system' not in users:
+        users['system'] = {'password': 'backup_internal_account', 'role': 'admin', 'created_at': 'system'}
+        save_users(users)
     sessions = load_sessions()
     sessions[tok] = {'username': 'system', 'created_at': 0, 'expires_at': 9999999999}
     save_sessions(sessions)

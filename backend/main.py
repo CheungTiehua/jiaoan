@@ -116,8 +116,12 @@ async def setup_status():
 
 @app.post("/api/setup/complete")
 async def setup_complete(req: dict):
+    from auth import load_users, register_user
+    if len(load_users()) > 0:
+        raise HTTPException(status_code=403, detail="系统已初始化")
+
     password = str(req.get("password", "")).strip()
-    api_key = str(req.get("api_key", "")).strip()
+    api_key = str(req.get("api_key", "")).strip().replace("\n", "").replace("\r", "")
     if len(password) < 4:
         raise HTTPException(status_code=400, detail="管理员密码至少4位")
     if not api_key:
@@ -126,7 +130,6 @@ async def setup_complete(req: dict):
     env_file = Path(__file__).resolve().parent.parent / ".env"
     env_file.write_text(f"DEEPSEEK_API_KEY={api_key}\n")
 
-    from auth import register_user
     ok, msg = register_user("admin", password)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)

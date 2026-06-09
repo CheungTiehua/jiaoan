@@ -271,7 +271,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                           try { await fetch(`${API}/admin/reviews/${r.id}/approve`, { method: "POST", headers }); loadDashboard(); } catch { console.error("approve failed"); }
                         }} className="bg-green-500 text-white text-sm px-4 py-1 rounded hover:bg-green-600">通过</button>
                         <button onClick={async () => {
-                          try { await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers }); loadDashboard(); } catch { console.error("reject failed"); }
+                          try { await fetch(`${API}/admin/reviews/${r.id}/reject`, { method: "POST", headers, body: JSON.stringify({ comment: "" }) }); loadDashboard(); } catch { console.error("reject failed"); }
                         }} className="bg-red-500 text-white text-sm px-4 py-1 rounded hover:bg-red-600">打回</button>
                         <button onClick={async () => {
                           const section = prompt("标注章节（教材分析/教学目标/教学过程/板书设计/作业布置）：");
