@@ -734,18 +734,24 @@ export default function Home() {
                 <h3 className="text-sm font-semibold text-blue-800 mb-2">📥 导出教案</h3>
                 <div className="flex gap-2">
                   <button onClick={async () => {
-                    const r = await fetch(`${API}/export/${lastPlanId}?format=md`, { headers: { Authorization: `Bearer ${token}` } });
-                    const blob = await r.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `${lesson}_教案.md`; a.click();
-                    URL.revokeObjectURL(url);
+                    try {
+                      const r = await fetch(`${API}/export/${lastPlanId}?format=md`, { headers: { Authorization: `Bearer ${token}` } });
+                      if (!r.ok) { alert("导出失败"); return; }
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a"); a.href = url; a.download = `${lesson}_教案.md`; a.click();
+                      URL.revokeObjectURL(url);
+                    } catch { alert("导出失败：网络错误"); }
                   }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">下载 MD</button>
                   <button onClick={async () => {
-                    const r = await fetch(`${API}/export/${lastPlanId}?format=docx`, { headers: { Authorization: `Bearer ${token}` } });
-                    const blob = await r.blob();
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a"); a.href = url; a.download = `${lesson}_教案.docx`; a.click();
-                    URL.revokeObjectURL(url);
+                    try {
+                      const r = await fetch(`${API}/export/${lastPlanId}?format=docx`, { headers: { Authorization: `Bearer ${token}` } });
+                      if (!r.ok) { alert("导出失败"); return; }
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a"); a.href = url; a.download = `${lesson}_教案.docx`; a.click();
+                      URL.revokeObjectURL(url);
+                    } catch { alert("导出失败：网络错误"); }
                   }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">下载 DOCX</button>
                 </div>
                 {(lessonMindmap || methodMindmap) && (
