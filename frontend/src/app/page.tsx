@@ -187,7 +187,11 @@ export default function Home() {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ grade, lesson, requirements, class_hours: classHours, semester }),
       });
-      if (!res.ok) throw new Error((await res.json()).detail || "生成失败");
+      if (!res.ok) {
+        let detail = "生成失败";
+        try { const d = await res.json(); detail = d.detail || detail; } catch {}
+        throw new Error(detail);
+      }
       const d = await res.json();
       setExamAnalysis(d.exam_analysis || "");
       setPeerAnalysis(d.peer_analysis || "");
@@ -208,7 +212,11 @@ export default function Home() {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ current_plan: lessonPlan, revision_request: revisionInput, history: h }),
       });
-      if (!res.ok) throw new Error((await res.json()).detail || "修改失败");
+      if (!res.ok) {
+        let detail = "修改失败";
+        try { const d = await res.json(); detail = d.detail || detail; } catch {}
+        throw new Error(detail);
+      }
       const d = await res.json();
       setRevisionHistory(prev => [...prev, revisionInput, "修改完成"]);
       setLessonPlan(d.lesson_plan); setRevisionInput(""); setActiveTab("plan");
