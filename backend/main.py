@@ -461,21 +461,26 @@ async def admin_set_role(req: dict, username: str = Depends(require_admin)):
 
 @app.post("/api/admin/users/import")
 async def admin_import_users(req: dict, username: str = Depends(require_admin)):
-    """CSV 批量导入教师账号。CSV 格式：username,password"""
+    """CSV 批量导入教师账号。CSV 格式：username,password（用户名仅支持字母数字下划线连字符）"""
+    import csv as _csv, io as _io
     csv_text = str(req.get("csv", "")).strip()
     if not csv_text:
         raise HTTPException(status_code=400, detail="请提供 CSV 内容")
 
     results = {"created": [], "failed": []}
-    for line_no, line in enumerate(csv_text.split("\n"), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
+    reader = _csv.reader(_io.StringIO(csv_text))
+    for line_no, row in enumerate(reader, 1):
+        if not row or (len(row) == 1 and not row[0].strip()):
             continue
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) < 2:
+        if row[0].strip().startswith("#"):
+            continue
+        if len(row) < 2:
             results["failed"].append({"line": line_no, "reason": "格式错误，需要 username,password"})
             continue
-        u, p = parts[0], parts[1]
+        u, p = row[0].strip(), row[1].strip()
+        if not u or not p:
+            results["failed"].append({"line": line_no, "reason": "用户名或密码为空"})
+            continue
         ok, msg = register_user(u, p)
         audit_log(username, "admin", "import_user", u, ok, msg)
         if ok:
