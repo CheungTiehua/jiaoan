@@ -13,7 +13,6 @@ from fastapi import FastAPI, HTTPException, Header, Depends, Request
 from fastapi.responses import StreamingResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
 
 from rag import generate_lesson, revise_lesson, generate_unit_plan, generate_reflection
 from scripts.all_textbooks import GRADE_TEXTBOOKS
@@ -331,8 +330,6 @@ async def revise(req: ReviseRequest, username: str = Depends(require_auth)):
 @app.get("/api/history")
 async def history(username: str = Depends(require_auth)):
     """获取当前用户的生成历史"""
-    if not username:
-        raise HTTPException(status_code=401, detail="请先登录")
     return {"history": get_history(username)}
 
 
