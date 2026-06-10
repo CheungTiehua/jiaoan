@@ -748,6 +748,24 @@ export default function Home() {
                     URL.revokeObjectURL(url);
                   }} className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">下载 DOCX</button>
                 </div>
+                {(lessonMindmap || methodMindmap) && (
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={async () => {
+                      const r = await fetch(`${API}/export/${lastPlanId}?format=md&include_mindmap=true`, { headers: { Authorization: `Bearer ${token}` } });
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a"); a.href = url; a.download = `${lesson}_教案_含导图.md`; a.click();
+                      URL.revokeObjectURL(url);
+                    }} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">下载 MD（含导图）</button>
+                    <button onClick={async () => {
+                      const r = await fetch(`${API}/export/${lastPlanId}?format=docx&include_mindmap=true`, { headers: { Authorization: `Bearer ${token}` } });
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a"); a.href = url; a.download = `${lesson}_教案_含导图.docx`; a.click();
+                      URL.revokeObjectURL(url);
+                    }} className="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">下载 DOCX（含导图）</button>
+                  </div>
+                )}
               </div>
             )}
 
