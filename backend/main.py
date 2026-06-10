@@ -184,6 +184,7 @@ async def setup_complete(req: dict):
 
     import rag
     rag.reload_keys(api_key)
+    audit_log("admin", "admin", "setup_api_key", "", True, "初始化完成")
     return {"ok": True, "message": "初始化完成"}
 
 
