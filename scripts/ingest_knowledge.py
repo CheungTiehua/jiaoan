@@ -42,10 +42,28 @@ COLLECTION_NAME = "lesson_plans"
 _embedding_model = None
 
 def get_embedding_model():
-    """懒加载本地 Embedding 模型"""
+    """懒加载本地 Embedding 模型（优先 LEKAI_MODEL_DIR > 默认目录 > 在线下载）"""
     global _embedding_model
     if _embedding_model is None:
         from sentence_transformers import SentenceTransformer
+        import os as _os_ingest
+
+        # 优先使用 LEKAI_MODEL_DIR 环境变量指定的本地模型
+        local_dir = _os_ingest.environ.get("LEKAI_MODEL_DIR", "")
+        if local_dir:
+            p = __import__("pathlib").Path(local_dir)
+            if p.exists():
+                print(f"[INFO] 从 LEKAI_MODEL_DIR 加载模型: {local_dir}")
+                _embedding_model = SentenceTransformer(str(p))
+                return _embedding_model
+
+        # 默认本地目录
+        default_dir = PROJECT_ROOT / ".cache" / "models" / "bge-small-zh-v1.5"
+        if default_dir.exists():
+            print(f"[INFO] 从默认目录加载模型: {default_dir}")
+            _embedding_model = SentenceTransformer(str(default_dir))
+            return _embedding_model
+
         print("[INFO] 加载 Embedding 模型: BAAI/bge-small-zh-v1.5 ...")
         _embedding_model = SentenceTransformer(
             "BAAI/bge-small-zh-v1.5",
