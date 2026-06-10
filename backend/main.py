@@ -292,7 +292,6 @@ async def generate(
         raise HTTPException(status_code=400, detail="课题名称不能为空")
 
     # 生成端点速率限制
-    from security import check_rate_limit
     if check_rate_limit(f"gen_{username}", 20, 60):
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
     try:
@@ -748,6 +747,15 @@ async def admin_upload_lesson(
     if len(content) < 100:
         raise HTTPException(status_code=400, detail="文档内容过短（至少100字符）")
 
+    # 提取课题名做文件名（在 DeepSeek 格式化之前，避免测试钩子浪费 API 调用）
+    import re as _re2
+    match = re.search(r'《(.+?)》', content)
+    lesson_name = match.group(1) if match else Path(fn).stem
+
+    # 测试钩子：文件名含 force_ingest_fail 时模拟入库失败（放在文件写入和子进程入库之前）
+    if "force_ingest_fail" in fn.lower():
+        return {"ok": False, "lesson": lesson_name, "message": f"验收用：模拟入库失败"}
+
     # 尝试用 DeepSeek 格式化为标准模板
     try:
         from rag import call_deepseek
@@ -757,13 +765,9 @@ async def admin_upload_lesson(
     except Exception:
         formatted = content  # API不可用时直接用原文
 
-    # 提取课题名做文件名
+    # 用格式化后的内容重新提取课题名
     match = re.search(r'《(.+?)》', formatted)
-    lesson_name = match.group(1) if match else Path(fn).stem
-
-    # 测试钩子：文件名含 force_ingest_fail 时模拟入库失败（放在文件写入和子进程入库之前）
-    if "force_ingest_fail" in fn.lower():
-        return {"ok": False, "lesson": lesson_name, "message": f"验收用：模拟入库失败"}
+    lesson_name = match.group(1) if match else lesson_name
 
     # 保存到 knowledge-base/
     import re as _re
