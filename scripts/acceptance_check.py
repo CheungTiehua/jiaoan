@@ -15,7 +15,6 @@ LeKai 交付验收脚本
 import json
 import io
 import os
-import re
 import shutil
 import sys
 import requests
@@ -286,7 +285,6 @@ else:
 # ---- 清理验收测试数据 ----
 def cleanup_acceptance_artifacts():
     """清理 acctest_ 开头的测试用户及相关数据"""
-    import glob as _glob
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     cleaned = 0
     warnings = []
