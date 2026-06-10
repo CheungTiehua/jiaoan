@@ -25,8 +25,10 @@
 |------|------|
 | 管理员用户名 | admin |
 | 管理员密码 | ________ |
-| DeepSeek API Key | sk-______________ |
+| DeepSeek API Key（掩码） | sk-****...****____（后4位） |
 | API Key 备注 | （如：学校教研组专用，每月额度约xx万token） |
+
+> ⚠️ API Key 完整值不应记录在此表中。请将完整 Key 存入密码管理器或加密存储，此处仅记后4位和备注便于识别。
 
 ---
 
@@ -40,7 +42,8 @@
 - [ ] Embedding 模型已就绪
 - [ ] 至少上传一篇优秀教案，入库成功
 - [ ] 知识库 chunks > 0
-- [ ] 验收脚本 `acceptance_check.py` 输出 ACCEPTANCE PASSED
+- [ ] 演练脚本 `delivery_dry_run.py` 通过
+- [ ] 验收脚本 `acceptance_check.py` 输出 ACCEPTANCE PASSED（与 dry-run 互补，缺一不可）
 
 ---
 
