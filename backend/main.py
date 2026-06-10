@@ -443,7 +443,7 @@ async def admin_approve(record_id: str, username: str = Depends(require_admin_or
 async def admin_reject(record_id: str, req: dict | None = None, username: str = Depends(require_admin_or_reviewer)):
     if req is None:
         req = {}
-    comment = str(req.get("comment", "")) if isinstance(req, dict) else ""
+    comment = str(req.get("comment", ""))
     ok = reject_review(record_id, username, comment)
     if not ok:
         raise HTTPException(status_code=404, detail="审核记录不存在")
@@ -936,7 +936,7 @@ async def admin_upload_lesson(
             from search_engine import refresh_index
             refresh_index()
         except Exception:
-            pass
+            _log.exception("入库后BM25索引刷新失败")
         role = get_user_role(username)
         audit_log(username, role, "ingest_lesson", lesson_name)
         return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
