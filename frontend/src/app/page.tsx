@@ -180,6 +180,7 @@ export default function Home() {
     if (!lesson.trim()) { setError("请选择课题"); return; }
     setError(""); setLoading(true);
     setExamAnalysis(""); setPeerAnalysis(""); setLessonPlan(""); setTeachingGuide("");
+    setLessonMindmap(""); setMethodMindmap(""); setMindmapError("");
     setRevisionHistory([]); setRevisionInput(""); setActiveTab("plan");
     try {
       const res = await fetch(`${API}/generate`, {
@@ -230,7 +231,7 @@ export default function Home() {
   };
 
   // Mindmap
-  const handleGenerateMindmap = async () => {
+  const handleGenerateMindmap = useCallback(async () => {
     if (!lessonPlan) { setMindmapError("请先生成教案，再生成思维导图"); return; }
     setMindmapError(""); setMindmapLoading(true);
     setLessonMindmap(""); setMethodMindmap("");
@@ -246,17 +247,19 @@ export default function Home() {
           peer_reference: peerAnalysis,
         }),
       });
-      const d = await res.json();
       if (!res.ok) {
+        let detail = "思维导图生成失败";
+        try { const d = await res.json(); detail = d.detail || detail; } catch {}
         if (res.status === 401) throw new Error("登录已过期，请重新登录");
         if (res.status === 429) throw new Error("请求过于频繁，请稍后再试");
-        throw new Error(d.detail || "思维导图生成失败");
+        throw new Error(detail);
       }
+      const d = await res.json();
       setLessonMindmap(d.lesson_mindmap_mermaid || "");
       setMethodMindmap(d.method_mindmap_mermaid || "");
     } catch (e: any) { setMindmapError(e.message); }
     finally { setMindmapLoading(false); }
-  };
+  }, [lessonPlan, teachingGuide, examAnalysis, peerAnalysis, grade, lesson, token]);
 
   const copyMermaidSource = (code: string) => {
     navigator.clipboard.writeText(code).then(

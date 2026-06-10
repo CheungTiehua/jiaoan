@@ -8,6 +8,8 @@ type MermaidMindmapProps = {
 
 export default function MermaidMindmap({ code }: MermaidMindmapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
+  const mermaidRef = useRef<any>(null);
   const [error, setError] = useState("");
   const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 9)}`);
 
@@ -20,9 +22,14 @@ export default function MermaidMindmap({ code }: MermaidMindmapProps) {
 
     const render = async () => {
       try {
-        const mermaid = (await import("mermaid")).default;
-        mermaid.initialize({ startOnLoad: false, theme: "neutral" });
-        const { svg } = await mermaid.render(idRef.current, code);
+        if (!mermaidRef.current) {
+          mermaidRef.current = (await import("mermaid")).default;
+        }
+        if (!initializedRef.current) {
+          mermaidRef.current.initialize({ startOnLoad: false, theme: "neutral" });
+          initializedRef.current = true;
+        }
+        const { svg } = await mermaidRef.current.render(idRef.current, code);
         if (!cancelled && containerRef.current) {
           containerRef.current.innerHTML = svg;
           setError("");
