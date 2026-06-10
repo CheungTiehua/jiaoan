@@ -748,7 +748,6 @@ async def admin_upload_lesson(
         raise HTTPException(status_code=400, detail="文档内容过短（至少100字符）")
 
     # 提取课题名做文件名（在 DeepSeek 格式化之前，避免测试钩子浪费 API 调用）
-    import re as _re2
     match = re.search(r'《(.+?)》', content)
     lesson_name = match.group(1) if match else Path(fn).stem
 
