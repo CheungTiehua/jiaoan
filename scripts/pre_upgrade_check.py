@@ -97,8 +97,6 @@ def main():
     disk = shutil.disk_usage(PROJECT_ROOT)
     free_gb = round(disk.free / 1024**3, 1)
     check(free_gb > 1, f"磁盘空间: {free_gb}GB 可用")
-    if free_gb <= 1:
-        fail(f"磁盘空间: 仅 {free_gb}GB 可用，建议至少保留 1GB")
 
     # 6. 生成升级前备份
     print()

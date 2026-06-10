@@ -8,8 +8,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
-LOG_FILE = PROJECT_ROOT / "logs" / "lekai.log"
-LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
 
 def get_health() -> dict:
@@ -39,6 +37,7 @@ def get_health() -> dict:
 
     # 用户数据
     users_file = PROJECT_ROOT / "data" / "users.json"
-    health["checks"]["users"] = {"exists": users_file.exists(), "ok": True}
+    users_ok = users_file.exists()
+    health["checks"]["users"] = {"exists": users_ok, "ok": users_ok}
 
     return health

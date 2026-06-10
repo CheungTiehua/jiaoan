@@ -3,7 +3,6 @@
 import io
 import json as _json
 import sys
-import time as _time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -30,13 +29,13 @@ from collab import (
     share_plan, get_group_plans, assign_task, get_group_tasks,
     complete_task, add_comment,
 )
-from config import VERSION
+from config import VERSION, PROMPTS_FILE
 from security import check_rate_limit
 from health import get_health
 from backup import create_backup, restore_backup
 from feedback import submit_feedback, get_feedback, get_stats as get_feedback_stats
 from annotation import add_annotation, get_annotations, get_stats as get_annotation_stats
-from fastapi import UploadFile, File as FastAPIFile, Form
+from fastapi import UploadFile, File as FastAPIFile
 
 app = FastAPI(
     title="LeKai教案知识库 API",
@@ -396,7 +395,9 @@ async def admin_approve(record_id: str, username: str = Depends(require_admin_or
     return {"message": "已批准"}
 
 @app.post("/api/admin/reviews/{record_id}/reject")
-async def admin_reject(record_id: str, req: dict = {}, username: str = Depends(require_admin_or_reviewer)):
+async def admin_reject(record_id: str, req: dict | None = None, username: str = Depends(require_admin_or_reviewer)):
+    if req is None:
+        req = {}
     comment = str(req.get("comment", "")) if isinstance(req, dict) else ""
     ok = reject_review(record_id, username, comment)
     if not ok:
@@ -532,8 +533,6 @@ async def admin_restore(file: UploadFile = FastAPIFile(...), username: str = Dep
 
 
 # ---- Prompt 在线配置 ----
-
-PROMPTS_FILE = Path(__file__).resolve().parent.parent / "data" / ".system_prompts"
 
 
 @app.get("/api/admin/prompts")
@@ -800,9 +799,10 @@ async def admin_upload_lesson(
 
 @app.get("/api/admin/device-info")
 async def admin_device_info(username: str = Depends(require_admin_or_reviewer)):
-    import uuid, shutil
+    import shutil
+    from config import get_device_mac
     proj = Path(__file__).resolve().parent.parent
-    mac = ":".join(f"{(uuid.getnode() >> (8*i)) & 0xff:02x}" for i in range(5, -1, -1))
+    mac = get_device_mac()
     disk = shutil.disk_usage(proj)
     lic_file = proj / ".license"
     lic_status = "已授权" if lic_file.exists() else "未授权"

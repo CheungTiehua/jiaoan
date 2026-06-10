@@ -22,12 +22,10 @@
 """
 
 import argparse
-import json
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Optional
 
 import requests
 

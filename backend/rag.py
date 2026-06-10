@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from config import (
     DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL,
-    RETRIEVAL_TOP_K
+    RETRIEVAL_TOP_K, PROMPTS_FILE
 )
 from prompts import (
     EXAM_ANALYSIS_SYSTEM, EXAM_ANALYSIS_USER,
@@ -55,7 +55,6 @@ def _get_api_key() -> str:
 
 # 加载在线自定义 Prompt（管理员可修改，缓存+mtime检测）
 import os as _os
-PROMPTS_FILE = Path(__file__).resolve().parent.parent / "data" / ".system_prompts"
 _prompt_cache: dict = {}
 _prompt_mtime: float = 0
 

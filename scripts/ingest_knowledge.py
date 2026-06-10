@@ -34,9 +34,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE_BASE = PROJECT_ROOT / "knowledge-base"
 CHROMA_DIR = PROJECT_ROOT / "chroma_db"
 
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
-DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-
 # Embedding 维度（bge-small-zh-v1.5 → 512）
 EMBEDDING_DIM = 512
 COLLECTION_NAME = "lesson_plans"

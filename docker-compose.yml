@@ -36,7 +36,7 @@ services:
         NEXT_PUBLIC_API_URL: /api
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:3000 || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:3000 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

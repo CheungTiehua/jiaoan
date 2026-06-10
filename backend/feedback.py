@@ -3,9 +3,12 @@ LeKai 教案反馈闭环 — 教师评分 + 检索权重反哺
 """
 
 import json
+import logging
 import time
 from collections import defaultdict
 from pathlib import Path
+
+_log = logging.getLogger("lekai")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 FEEDBACK_DIR = PROJECT_ROOT / "data" / "feedback"
@@ -106,7 +109,7 @@ def _load_weights() -> dict:
         try:
             return json.loads(WEIGHTS_FILE.read_text())
         except Exception:
-            pass
+            _log.error("引用权重文件损坏，已重置: %s", WEIGHTS_FILE.name)
     return {}
 
 

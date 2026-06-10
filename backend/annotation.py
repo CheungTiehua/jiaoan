@@ -3,9 +3,12 @@ LeKai 段落标注 — 教研组长审核时标注教案具体段落
 """
 
 import json
+import logging
 import os
 import time
 from pathlib import Path
+
+_log = logging.getLogger("lekai")
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ANNOTATION_DIR = PROJECT_ROOT / "data" / "annotations"
@@ -33,7 +36,13 @@ def add_annotation(
         try:
             annotations = json.loads(filepath.read_text())
         except Exception:
-            pass
+            _log.warning("标注文件损坏，备份后重置: %s", filepath.name)
+            # 备份损坏文件避免数据丢失
+            try:
+                import shutil
+                shutil.copy2(filepath, filepath.with_suffix(".json.corrupted"))
+            except Exception:
+                pass
 
     annotations.append({
         "reviewer": reviewer,
@@ -54,8 +63,8 @@ def get_annotations(review_id: str) -> list[dict]:
     if filepath.exists():
         try:
             return json.loads(filepath.read_text())
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            _log.warning("读取标注文件失败: %s: %s", filepath.name, e)
     return []
 
 
@@ -71,6 +80,6 @@ def get_stats() -> dict:
                     tp = "note"
                 if sec in stats:
                     stats[sec][tp] += 1
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            _log.warning("读取标注文件失败: %s: %s", f.name, e)
     return stats

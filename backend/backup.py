@@ -5,14 +5,17 @@ LeKai 备份恢复 — zip打包 + Zip Bomb防护
 
 import io
 import json
+import logging
 import shutil
 import time
 import zipfile
 from pathlib import Path
 
+_log = logging.getLogger("lekai")
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
-CHROMA_DIR = PROJECT_ROOT / "chroma_db"
+from config import CHROMA_DIR
 BACKUP_DIR = DATA_DIR / "_backup"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -90,4 +93,5 @@ def restore_backup(file_data: bytes) -> tuple[bool, str]:
     except zipfile.BadZipFile:
         return False, "备份文件损坏"
     except Exception as e:
-        return False, f"恢复失败: {str(e)}"
+        _log.error("备份恢复失败: %s", e)
+        return False, "备份恢复失败，请查看服务端日志"

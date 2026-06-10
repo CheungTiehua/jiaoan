@@ -4,7 +4,6 @@
 借鉴 zhishiku 的四路混合检索方案，适配教案知识库场景。
 """
 
-import hashlib
 import os
 from pathlib import Path
 from typing import Optional

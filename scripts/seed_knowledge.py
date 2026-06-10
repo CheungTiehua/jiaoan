@@ -13,7 +13,6 @@ LeKai 种子知识库批量生成工具
 """
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -24,9 +23,6 @@ import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE_BASE = PROJECT_ROOT / "knowledge-base"
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from all_textbooks import GRADE_TEXTBOOKS
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")

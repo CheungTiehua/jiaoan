@@ -75,9 +75,12 @@ check("4. admin 可创建 teacher 账号", r.status_code == 200, str(r.json().ge
 r2 = requests.post(f"{BASE}/api/login",
                    json={"username": teacher_name, "password": teacher_pw})
 teacher_token = r2.json().get("token", "")
-r = requests.get(f"{BASE}/api/health/deep",
-                 headers={"Authorization": f"Bearer {teacher_token}"})
-check("5. teacher 无法访问 health/deep", r.status_code in (401, 403), f"status={r.status_code}")
+if not teacher_token:
+    check("5. teacher 无法访问 health/deep", False, "teacher login failed, cannot verify")
+else:
+    r = requests.get(f"{BASE}/api/health/deep",
+                     headers={"Authorization": f"Bearer {teacher_token}"})
+    check("5. teacher 无法访问 health/deep", r.status_code in (401, 403), f"status={r.status_code}")
 
 # ---- 6. 备份包含 data/users.json ----
 r = requests.post(f"{BASE}/api/admin/backup", headers=admin_h)

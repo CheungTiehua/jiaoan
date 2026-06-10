@@ -188,8 +188,7 @@ def set_user_role(username: str, role: str) -> bool:
     if role not in ("teacher", "reviewer", "admin"):
         return False
     import fcntl
-    from pathlib import Path as _P
-    lock_file = _P(__file__).resolve().parent.parent / "data" / "users.lock"
+    lock_file = Path(__file__).resolve().parent.parent / "data" / "users.lock"
     with open(lock_file, "w") as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)
         try:

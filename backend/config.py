@@ -36,5 +36,18 @@ if _lic_file.exists():
 _EXPIRE_DATE = os.getenv("LEKAI_EXPIRE_DATE", "")
 if _EXPIRE_DATE:
     import datetime as _dt
-    if _dt.date.today() > _dt.date.fromisoformat(_EXPIRE_DATE):
+    try:
+        _expire = _dt.date.fromisoformat(_EXPIRE_DATE)
+    except ValueError:
+        raise RuntimeError("授权日期格式错误，应为 YYYY-MM-DD") from None
+    if _dt.date.today() > _expire:
         raise RuntimeError("授权已到期，请联系 LeKai 续费。")
+
+
+def get_device_mac() -> str:
+    """获取设备 MAC 地址"""
+    return ":".join(f"{(_uuid.getnode() >> (8*i)) & 0xff:02x}" for i in range(5, -1, -1))
+
+
+# Prompt 配置文件路径
+PROMPTS_FILE = PROJECT_ROOT / "data" / ".system_prompts"
