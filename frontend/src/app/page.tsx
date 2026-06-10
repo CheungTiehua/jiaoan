@@ -22,11 +22,9 @@ export default function Home() {
   const [authError, setAuthError] = useState("");
 
   const [lastPlanId, setLastPlanId] = useState<string>("");
-  const [showFeedback, setShowFeedback] = useState(false);
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [evaluation, setEvaluation] = useState("");
   const [evaluating, setEvaluating] = useState(false);
-  const [evaluatedLesson, setEvaluatedLesson] = useState("");
 
   // Unit plan
   const [unitName, setUnitName] = useState("");
@@ -847,7 +845,6 @@ export default function Home() {
                   const res = await fetch(`${API}/evaluate`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
                   const d = await res.json();
                   setEvaluation(d.evaluation || "");
-                  setEvaluatedLesson(d.lesson_name || "");
                 } catch { setError("评价失败"); }
                 finally { setEvaluating(false); e.target.value = ""; }
               }} className="text-xs" />

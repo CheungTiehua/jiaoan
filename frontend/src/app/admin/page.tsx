@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
