@@ -258,7 +258,7 @@ if mindmap_record_id:
         check("16. mindmap appendix exported in markdown", False, f"status={r.status_code}")
 else:
     if not SKIP_REAL_MINDMAP:
-        check("16. mindmap appendix exported in markdown", False, "no record_id")
+        check("16. mindmap appendix exported in markdown", False, "no record_id — mindmap generation for record_id failed")
     else:
         print("  ⏭️  16. mindmap appendix exported in markdown (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
 
@@ -271,7 +271,7 @@ if mindmap_record_id:
           f"status={r.status_code}, size={len(r.content)}")
 else:
     if not SKIP_REAL_MINDMAP:
-        check("17. mindmap appendix exported in docx", False, "no record_id")
+        check("17. mindmap appendix exported in docx", False, "no record_id — mindmap generation for record_id failed")
     else:
         print("  ⏭️  17. mindmap appendix exported in docx (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
 
