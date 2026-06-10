@@ -286,6 +286,7 @@ else:
 def cleanup_acceptance_artifacts():
     """清理 acctest_ 开头的测试用户及相关数据"""
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, project_root)
     cleaned = 0
     warnings = []
 
@@ -346,9 +347,8 @@ def cleanup_acceptance_artifacts():
                     del users[u]
                     print(f"  [CLEANUP] 已删除用户: {u}")
                     cleaned += 1
-                from pathlib import Path as _P
                 from backend.security import atomic_write
-                atomic_write(_P(users_file), json.dumps(users, ensure_ascii=False, indent=2).encode())
+                atomic_write(users_file, json.dumps(users, ensure_ascii=False, indent=2).encode())
         except Exception as e:
             warnings.append(f"清理 users.json 失败: {e}")
 
@@ -363,9 +363,8 @@ def cleanup_acceptance_artifacts():
                 del sessions[k]
                 cleaned += 1
             if test_sessions:
-                from pathlib import Path as _P
                 from backend.security import atomic_write
-                atomic_write(_P(sessions_file), json.dumps(sessions, ensure_ascii=False, indent=2).encode())
+                atomic_write(sessions_file, json.dumps(sessions, ensure_ascii=False, indent=2).encode())
                 print(f"  [CLEANUP] 已清理 {len(test_sessions)} 个 acctest session")
         except Exception as e:
             warnings.append(f"清理 sessions.json 失败: {e}")
