@@ -32,6 +32,7 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 ADMIN_USER = os.environ.get("ACCEPT_ADMIN_USER", "")
 ADMIN_PASS = os.environ.get("ACCEPT_ADMIN_PASSWORD", "")
 BASE = os.environ.get("ACCEPT_BASE_URL", "http://127.0.0.1:8000")
