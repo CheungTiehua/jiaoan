@@ -104,11 +104,11 @@ class ReviseResponse(BaseModel):
 
 class MindmapGenerateRequest(BaseModel):
     grade: str = ""
-    lesson: str
-    lesson_plan: str
-    teaching_guide: str = ""
-    analysis: str = ""
-    peer_reference: str = ""
+    lesson: str = Field(..., max_length=100)
+    lesson_plan: str = Field(..., max_length=10000)
+    teaching_guide: str = Field(default="", max_length=10000)
+    analysis: str = Field(default="", max_length=10000)
+    peer_reference: str = Field(default="", max_length=10000)
 
 
 class MindmapGenerateResponse(BaseModel):
@@ -649,6 +649,10 @@ async def generate_mindmap(
         raise HTTPException(status_code=400, detail="教案内容不能为空")
     if len(req.lesson_plan.strip()) < 100:
         raise HTTPException(status_code=400, detail="教案内容过短，无法生成思维导图")
+
+    # 速率限制（mindmap 生成成本较高，频率限制低于教案生成）
+    if check_rate_limit(f"mindmap_{username}", 10, 60):
+        raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
 
     try:
         # 验收测试钩子：仅管理员可通过请求头触发
