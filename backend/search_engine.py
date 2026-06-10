@@ -33,8 +33,9 @@ def get_embedding_model():
             try:
                 _embedding_model = SentenceTransformer(local_model_dir)
                 return _embedding_model
-            except Exception:
-                pass  # 本地目录加载失败，回退到默认方式
+            except Exception as e:
+                import sys
+                print(f"[search_engine] 本地模型加载失败 ({local_model_dir}): {e}", file=sys.stderr)
 
         try:
             _embedding_model = SentenceTransformer(
