@@ -239,7 +239,9 @@ if mindmap_record_id:
         check("15. mindmap persists to history", False, f"save failed: status={r.status_code}")
 else:
     if not SKIP_REAL_MINDMAP:
-        check("15. mindmap persists to history", False, "no record_id from mindmap generation")
+        check("15. mindmap persists to history", False, "no record_id — lesson plan generation for record_id failed")
+    else:
+        print("  ⏭️  15. mindmap persists to history (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
 
 # ---- 16. mindmap 导出附录（MD） ----
 if mindmap_record_id:
@@ -257,6 +259,8 @@ if mindmap_record_id:
 else:
     if not SKIP_REAL_MINDMAP:
         check("16. mindmap appendix exported in markdown", False, "no record_id")
+    else:
+        print("  ⏭️  16. mindmap appendix exported in markdown (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
 
 # ---- 17. mindmap 导出附录（DOCX） ----
 if mindmap_record_id:
@@ -268,6 +272,8 @@ if mindmap_record_id:
 else:
     if not SKIP_REAL_MINDMAP:
         check("17. mindmap appendix exported in docx", False, "no record_id")
+    else:
+        print("  ⏭️  17. mindmap appendix exported in docx (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
 
 # ---- 结果 ----
 print(f"\n{'='*40}")
