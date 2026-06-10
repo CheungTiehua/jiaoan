@@ -593,6 +593,7 @@ export default function Home() {
                       error={mindmapError}
                       hasPlan={!!lessonPlan}
                       onGenerate={handleGenerateMindmap}
+                      saveStatus={mindmapSaveStatus}
                       onCopy={() => copyMermaidSource(activeTab === "lessonMindmap" ? lessonMindmap : methodMindmap)}
                       onDownload={() => downloadMermaidSource(
                         activeTab === "lessonMindmap" ? lessonMindmap : methodMindmap,
@@ -846,9 +847,9 @@ export default function Home() {
 }
 
 function MindmapTabContent({
-  code, loading, error, hasPlan, onGenerate, onCopy, onDownload,
+  code, loading, error, hasPlan, saveStatus, onGenerate, onCopy, onDownload,
 }: {
-  code: string; loading: boolean; error: string; hasPlan: boolean;
+  code: string; loading: boolean; error: string; hasPlan: boolean; saveStatus: string;
   onGenerate: () => void; onCopy: () => void; onDownload: () => void;
 }) {
   if (!hasPlan) {
@@ -879,6 +880,7 @@ function MindmapTabContent({
 
   return (
     <div>
+      {saveStatus && <div className="text-xs text-amber-600 mb-2">{saveStatus}</div>}
       <MermaidMindmap code={code} />
       <div className="mt-4 border-t border-gray-100 pt-3">
         <button onClick={onCopy} className="text-xs text-indigo-600 hover:text-indigo-800 mr-4">📋 复制 Mermaid 源码</button>
