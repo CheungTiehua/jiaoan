@@ -241,6 +241,26 @@ def get_history_detail(username: str, record_id: str) -> Optional[dict]:
     try:
         data = json.loads(filepath.read_text())
         data["id"] = record_id
+        # 兼容老数据：确保导图字段存在
+        data.setdefault("lesson_mindmap_mermaid", "")
+        data.setdefault("method_mindmap_mermaid", "")
         return data
     except Exception:
         return None
+
+
+def save_history_mindmap(username: str, record_id: str, lesson_mindmap: str, method_mindmap: str) -> bool:
+    """保存思维导图到历史记录"""
+    safe_id = os.path.basename(str(record_id))
+    filepath = HISTORY_DIR / username / f"{safe_id}.json"
+    if not filepath.exists():
+        return False
+    try:
+        data = json.loads(filepath.read_text())
+        data["lesson_mindmap_mermaid"] = lesson_mindmap or ""
+        data["method_mindmap_mermaid"] = method_mindmap or ""
+        from security import atomic_write
+        atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
+        return True
+    except Exception:
+        return False

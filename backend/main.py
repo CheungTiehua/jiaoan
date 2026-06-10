@@ -21,7 +21,7 @@ from scripts.all_textbooks import GRADE_TEXTBOOKS
 from auth import (
     register_user, login_user, logout_user, get_user_from_token,
     list_users, save_history, get_history, get_history_detail,
-    get_user_role,
+    get_user_role, save_history_mindmap,
 )
 from admin_api import (
     submit_for_review, get_review_queue, get_review_detail,
@@ -364,6 +364,26 @@ async def history_detail(record_id: str, username: str = Depends(require_auth)):
     if not detail:
         raise HTTPException(status_code=404, detail="记录不存在")
     return detail
+
+
+@app.post("/api/history/{record_id}/mindmap")
+async def history_save_mindmap(record_id: str, req: dict, username: str = Depends(require_auth)):
+    """保存思维导图到历史记录"""
+    lesson_mm = str(req.get("lesson_mindmap_mermaid", "")).strip()
+    method_mm = str(req.get("method_mindmap_mermaid", "")).strip()
+
+    if not lesson_mm and not method_mm:
+        raise HTTPException(status_code=400, detail="思维导图内容不能为空")
+
+    detail = get_history_detail(username, record_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    ok = save_history_mindmap(username, record_id, lesson_mm, method_mm)
+    if not ok:
+        raise HTTPException(status_code=500, detail="保存思维导图失败")
+
+    return {"ok": True, "message": "思维导图已保存"}
 
 
 # ---- Review API ----
@@ -720,7 +740,8 @@ async def evaluate_plan(file: UploadFile = FastAPIFile(...), username: str = Dep
 # ---- 教案导出 ----
 
 @app.get("/api/export/{plan_id}")
-async def export_plan(plan_id: str, format: str = "md", username: str = Depends(require_auth)):
+async def export_plan(plan_id: str, format: str = "md", include_mindmap: str = "false",
+                      username: str = Depends(require_auth)):
     """导出教案为 md / docx"""
     from auth import get_history_detail
     detail = get_history_detail(username, plan_id)
@@ -731,11 +752,20 @@ async def export_plan(plan_id: str, format: str = "md", username: str = Depends(
     guide_text = detail.get("teaching_guide", "")
     lesson = detail.get("lesson", "教案")
     grade = detail.get("grade", "")
+    include_mm = include_mindmap.lower() == "true"
 
     if format == "md":
         full = plan_text
         if guide_text:
             full += "\n\n---\n\n" + guide_text
+
+        if include_mm:
+            lesson_mm = detail.get("lesson_mindmap_mermaid", "")
+            method_mm = detail.get("method_mindmap_mermaid", "")
+            if lesson_mm or method_mm:
+                full += "\n\n---\n\n# 附录：教案思维导图\n\n```mermaid\n" + (lesson_mm or "> 暂无思维导图") + "\n```"
+                full += "\n\n# 附录：备课方法思维导图\n\n```mermaid\n" + (method_mm or "> 暂无思维导图") + "\n```"
+
         from fastapi.responses import Response
         return Response(content=full.encode("utf-8"), media_type="text/markdown",
                        headers={"Content-Disposition": f"attachment; filename={lesson}_教案.md"})
@@ -769,6 +799,16 @@ async def export_plan(plan_id: str, format: str = "md", username: str = Depends(
                     doc.add_heading(line[3:], 2)
                 elif line.strip():
                     doc.add_paragraph(line.strip())
+
+        if include_mm:
+            lesson_mm = detail.get("lesson_mindmap_mermaid", "")
+            method_mm = detail.get("method_mindmap_mermaid", "")
+            if lesson_mm or method_mm:
+                doc.add_page_break()
+                doc.add_heading("附录：教案思维导图（Mermaid 源码）", 1)
+                doc.add_paragraph(lesson_mm or "暂无思维导图")
+                doc.add_heading("附录：备课方法思维导图（Mermaid 源码）", 1)
+                doc.add_paragraph(method_mm or "暂无思维导图")
 
         buf = io.BytesIO()
         doc.save(buf)
