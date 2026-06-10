@@ -342,7 +342,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
               <div className="bg-white rounded-lg border p-4 mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">📋 批量导入教师</h3>
                 <p className="text-xs text-gray-400 mb-2">CSV 格式：每行一个用户，逗号分隔用户名和密码</p>
-                <textarea id="csv-input" rows={4} placeholder={"张老师,zhang123\n李老师,li123\n王老师,wang123"}
+                <textarea id="csv-input" rows={4} placeholder={"zhang_teacher,zhang123\nli_teacher,li123\nwang_teacher,wang123"}
                   className="w-full border rounded px-3 py-2 text-xs font-mono mb-2" />
                 <div className="flex gap-2 items-center">
                   <button onClick={async () => {
