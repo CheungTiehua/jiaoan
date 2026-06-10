@@ -41,9 +41,20 @@ ACCEPT_ADMIN_USER=admin \
 ACCEPT_ADMIN_PASSWORD=你的密码 \
 python scripts/acceptance_check.py
 
-# Docker 环境（给后端容器设置 LEKAI_ACCEPTANCE_MODE=1）
-docker compose exec -e LEKAI_ACCEPTANCE_MODE=1 backend python scripts/acceptance_check.py
+# Docker 环境（必须先让后端容器以验收模式启动）
+LEKAI_ACCEPTANCE_MODE=1 docker compose up -d --force-recreate backend
+
+# 运行验收（脚本本身也需要这个环境变量来检查）
+LEKAI_ACCEPTANCE_MODE=1 \
+ACCEPT_ADMIN_USER=admin \
+ACCEPT_ADMIN_PASSWORD=你的密码 \
+python scripts/acceptance_check.py
+
+# 验收完成后关闭验收模式
+LEKAI_ACCEPTANCE_MODE=0 docker compose up -d --force-recreate backend
 ```
+
+> 注意：不能用 `docker compose exec -e` 只给脚本进程设置环境变量，这不会改变已运行的后端容器环境。必须先重建后端容器使其以 `LEKAI_ACCEPTANCE_MODE=1` 启动，测试钩子才能生效。
 
 验收结束后脚本会自动清理 `acctest_` 开头的测试用户、历史记录、审核记录和 session。清理失败不影响验收结论，但会输出 `[WARN]` 提示。
 

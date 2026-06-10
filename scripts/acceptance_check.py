@@ -346,8 +346,9 @@ def cleanup_acceptance_artifacts():
                     del users[u]
                     print(f"  [CLEANUP] 已删除用户: {u}")
                     cleaned += 1
-                with open(users_file, "w") as fh:
-                    json.dump(users, fh, ensure_ascii=False, indent=2)
+                from pathlib import Path as _P
+                from security import atomic_write
+                atomic_write(_P(users_file), json.dumps(users, ensure_ascii=False, indent=2).encode())
         except Exception as e:
             warnings.append(f"清理 users.json 失败: {e}")
 
@@ -362,8 +363,9 @@ def cleanup_acceptance_artifacts():
                 del sessions[k]
                 cleaned += 1
             if test_sessions:
-                with open(sessions_file, "w") as fh:
-                    json.dump(sessions, fh, ensure_ascii=False, indent=2)
+                from pathlib import Path as _P
+                from security import atomic_write
+                atomic_write(_P(sessions_file), json.dumps(sessions, ensure_ascii=False, indent=2).encode())
                 print(f"  [CLEANUP] 已清理 {len(test_sessions)} 个 acctest session")
         except Exception as e:
             warnings.append(f"清理 sessions.json 失败: {e}")

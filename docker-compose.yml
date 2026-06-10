@@ -8,6 +8,7 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - LEKAI_ACCEPTANCE_MODE=${LEKAI_ACCEPTANCE_MODE:-0}
     volumes:
       - ./knowledge-base:/app/knowledge-base
       - ./data:/app/data
