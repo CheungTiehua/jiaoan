@@ -12,8 +12,9 @@
 - [ ] 2. 准备数据目录权限
   ```bash
   mkdir -p data knowledge-base
+  chown 10001:10001 data knowledge-base
   ```
-  确保部署用户对这些目录有读写权限。
+  容器内以 `lekai` (uid=10001) 运行，绑定挂载的目录必须可写。
 
 - [ ] 3. 构建 Docker 镜像
   ```bash
