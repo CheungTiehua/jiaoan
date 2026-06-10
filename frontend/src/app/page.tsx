@@ -75,6 +75,7 @@ export default function Home() {
   const [methodMindmap, setMethodMindmap] = useState("");
   const [mindmapLoading, setMindmapLoading] = useState(false);
   const [mindmapError, setMindmapError] = useState("");
+  const [mindmapSaveStatus, setMindmapSaveStatus] = useState("");
 
   // Revision
   const [revising, setRevising] = useState(false);
@@ -169,6 +170,10 @@ export default function Home() {
         setPeerAnalysis(d.peer_analysis || "");
         setLessonPlan(d.lesson_plan || "");
         setTeachingGuide(d.teaching_guide || "");
+        setLessonMindmap(d.lesson_mindmap_mermaid || "");
+        setMethodMindmap(d.method_mindmap_mermaid || "");
+        setMindmapError("");
+        setMindmapSaveStatus("");
         setActiveTab("plan");
         setShowHistory(false);
       }
@@ -180,7 +185,7 @@ export default function Home() {
     if (!lesson.trim()) { setError("请选择课题"); return; }
     setError(""); setLoading(true);
     setExamAnalysis(""); setPeerAnalysis(""); setLessonPlan(""); setTeachingGuide("");
-    setLessonMindmap(""); setMethodMindmap(""); setMindmapError("");
+    setLessonMindmap(""); setMethodMindmap(""); setMindmapError(""); setMindmapSaveStatus("");
     setRevisionHistory([]); setRevisionInput(""); setActiveTab("plan");
     try {
       const res = await fetch(`${API}/generate`, {
@@ -263,17 +268,44 @@ export default function Home() {
         throw new Error(detail);
       }
       const d = await res.json();
-      setLessonMindmap(d.lesson_mindmap_mermaid || "");
-      setMethodMindmap(d.method_mindmap_mermaid || "");
+      const lessonMm = d.lesson_mindmap_mermaid || "";
+      const methodMm = d.method_mindmap_mermaid || "";
+      setLessonMindmap(lessonMm);
+      setMethodMindmap(methodMm);
+
+      // 自动保存到历史记录
+      if (lastPlanId && (lessonMm || methodMm)) {
+        setMindmapSaveStatus("");
+        try {
+          const saveRes = await fetch(`${API}/history/${lastPlanId}/mindmap`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ lesson_mindmap_mermaid: lessonMm, method_mindmap_mermaid: methodMm }),
+          });
+          if (!saveRes.ok) setMindmapSaveStatus("导图已生成，但保存到历史记录失败");
+        } catch { setMindmapSaveStatus("导图已生成，但保存到历史记录失败"); }
+      }
     } catch (e: any) { setMindmapError(e.message); }
     finally { setMindmapLoading(false); }
-  }, [lessonPlan, teachingGuide, examAnalysis, peerAnalysis, grade, lesson, token]);
+  }, [lessonPlan, teachingGuide, examAnalysis, peerAnalysis, grade, lesson, token, lastPlanId]);
 
   const copyMermaidSource = (code: string) => {
     navigator.clipboard.writeText(code).then(
       () => alert("已复制"),
       () => alert("复制失败，请手动选择源码")
     );
+  };
+
+  const downloadMermaidSource = (code: string, suffix: string) => {
+    if (!code.trim()) return;
+    const safeLesson = lesson.replace(/[\\/:*?"<>|]/g, "");
+    const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeLesson}_${suffix}.mmd`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   // Reflection
@@ -562,6 +594,10 @@ export default function Home() {
                       hasPlan={!!lessonPlan}
                       onGenerate={handleGenerateMindmap}
                       onCopy={() => copyMermaidSource(activeTab === "lessonMindmap" ? lessonMindmap : methodMindmap)}
+                      onDownload={() => downloadMermaidSource(
+                        activeTab === "lessonMindmap" ? lessonMindmap : methodMindmap,
+                        activeTab === "lessonMindmap" ? "教案导图" : "备课方法导图"
+                      )}
                     />
                   ) : (
                     <div className="prose prose-amber prose-sm max-w-none">
@@ -810,10 +846,10 @@ export default function Home() {
 }
 
 function MindmapTabContent({
-  code, loading, error, hasPlan, onGenerate, onCopy,
+  code, loading, error, hasPlan, onGenerate, onCopy, onDownload,
 }: {
   code: string; loading: boolean; error: string; hasPlan: boolean;
-  onGenerate: () => void; onCopy: () => void;
+  onGenerate: () => void; onCopy: () => void; onDownload: () => void;
 }) {
   if (!hasPlan) {
     return <div className="text-center py-8 text-gray-400 text-sm">请先生成教案，再生成思维导图</div>;
@@ -846,6 +882,7 @@ function MindmapTabContent({
       <MermaidMindmap code={code} />
       <div className="mt-4 border-t border-gray-100 pt-3">
         <button onClick={onCopy} className="text-xs text-indigo-600 hover:text-indigo-800 mr-4">📋 复制 Mermaid 源码</button>
+        <button onClick={onDownload} className="text-xs text-indigo-600 hover:text-indigo-800 mr-4">⬇ 下载 Mermaid 源码</button>
         <details className="inline text-xs">
           <summary className="text-gray-500 cursor-pointer hover:text-gray-700 inline">查看 Mermaid 源码</summary>
           <pre className="mt-2 text-xs bg-gray-50 p-2 rounded border overflow-x-auto max-h-32 whitespace-pre">{code}</pre>
