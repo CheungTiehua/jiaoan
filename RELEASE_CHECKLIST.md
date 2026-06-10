@@ -11,6 +11,10 @@
 
 - [ ] 2. 生成升级前备份
   ```bash
+  # 首次部署（知识库尚未上传教案）
+  python scripts/pre_upgrade_check.py --allow-empty-kb
+
+  # 正式升级前（已有知识库）
   python scripts/pre_upgrade_check.py
   ```
   确认输出 `PRE-UPGRADE CHECK PASSED`。

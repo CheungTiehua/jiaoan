@@ -21,11 +21,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def get_model_dir() -> Path:
-    """确定模型目录"""
+    """确定模型目录（默认: .cache/models/bge-small-zh-v1.5）"""
     env_dir = os.environ.get("LEKAI_MODEL_DIR", "")
     if env_dir:
         return Path(env_dir)
-    return PROJECT_ROOT / ".cache" / "models" / MODEL_NAME.replace("/", "--")
+    return PROJECT_ROOT / ".cache" / "models" / "bge-small-zh-v1.5"
 
 
 def check_model_ready(model_dir: Path) -> bool:

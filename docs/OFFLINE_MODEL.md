@@ -48,13 +48,18 @@ git clone https://huggingface.co/BAAI/bge-small-zh-v1.5
 scp -r models/bge-small-zh-v1.5/ root@192.168.x.x:/opt/lekai/.cache/models/
 ```
 
-### 步骤三：设置环境变量
+### 步骤三：设置环境变量（可选）
 
 在 `.env` 中添加：
 
 ```bash
 LEKAI_MODEL_DIR=/app/.cache/models/bge-small-zh-v1.5
 ```
+
+如果未设置 `LEKAI_MODEL_DIR`，后端会按以下优先级自动查找：
+1. `$LEKAI_MODEL_DIR` 环境变量指定的目录
+2. 项目默认目录 `.cache/models/bge-small-zh-v1.5`
+3. 在线从 HuggingFace 下载
 
 Docker Compose 中已通过 volume `model_cache:/app/.cache` 挂载，模型放在 `model_cache/models/` 下即可。
 

@@ -27,16 +27,25 @@ def get_embedding_model():
         from sentence_transformers import SentenceTransformer
         project_root = Path(__file__).resolve().parent.parent
 
-        # 优先使用 LEKAI_MODEL_DIR 环境变量指定的本地模型目录
-        local_model_dir = os.environ.get("LEKAI_MODEL_DIR", "")
-        if local_model_dir and Path(local_model_dir).exists():
-            try:
-                _embedding_model = SentenceTransformer(local_model_dir)
-                return _embedding_model
-            except Exception as e:
-                import sys
-                print(f"[search_engine] 本地模型加载失败 ({local_model_dir}): {e}", file=sys.stderr)
+        # 按优先级尝试本地模型目录: LEKAI_MODEL_DIR > 默认 .cache/models/bge-small-zh-v1.5
+        candidate_dirs = []
 
+        env_model_dir = os.environ.get("LEKAI_MODEL_DIR", "")
+        if env_model_dir:
+            candidate_dirs.append(Path(env_model_dir))
+
+        candidate_dirs.append(project_root / ".cache" / "models" / "bge-small-zh-v1.5")
+
+        for model_dir in candidate_dirs:
+            if model_dir.exists():
+                try:
+                    _embedding_model = SentenceTransformer(str(model_dir))
+                    return _embedding_model
+                except Exception as e:
+                    import sys
+                    print(f"[search_engine] 本地模型加载失败 ({model_dir}): {e}", file=sys.stderr)
+
+        # 本地无模型，尝试在线下载
         try:
             _embedding_model = SentenceTransformer(
                 MODEL_NAME,
