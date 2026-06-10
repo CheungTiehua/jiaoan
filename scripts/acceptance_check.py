@@ -364,7 +364,7 @@ def cleanup_acceptance_artifacts():
                 cleaned += 1
             if test_sessions:
                 from pathlib import Path as _P
-                from security import atomic_write
+                from backend.security import atomic_write
                 atomic_write(_P(sessions_file), json.dumps(sessions, ensure_ascii=False, indent=2).encode())
                 print(f"  [CLEANUP] 已清理 {len(test_sessions)} 个 acctest session")
         except Exception as e:
