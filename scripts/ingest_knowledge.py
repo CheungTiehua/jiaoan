@@ -251,14 +251,8 @@ def ingest(grade_filter: Optional[int] = None, reset: bool = False):
     print(f"  - ChromaDB总量: {count}")
     print(f"  - 存储位置: {CHROMA_DIR}")
 
-    # 刷新 BM25 索引
-    try:
-        sys.path.insert(0, str(PROJECT_ROOT / "backend"))
-        from search_engine import refresh_index
-        refresh_index()
-        print(f"  - BM25索引: 已刷新")
-    except Exception:
-        pass
+    # 注意：入库脚本运行在子进程中，BM25索引刷新由主进程在subprocess完成后执行
+    print(f"  - 入库完成（BM25索引由主进程刷新）")
 
 
 # ============================================================

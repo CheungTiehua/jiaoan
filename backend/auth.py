@@ -189,6 +189,13 @@ def save_history(username: str, grade: str, lesson: str, plan: dict) -> str:
 
     ts = int(time.time() * 1000)
     filepath = user_dir / f"{ts}.json"
+    # 防时钟回拨：若文件已存在则递增后缀
+    if filepath.exists():
+        for suffix in range(1, 100):
+            alt = user_dir / f"{ts}_{suffix}.json"
+            if not alt.exists():
+                filepath = alt
+                break
 
     record = {
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
