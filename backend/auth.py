@@ -208,7 +208,7 @@ def save_history(username: str, grade: str, lesson: str, plan: dict) -> str:
     }
     from security import atomic_write
     atomic_write(filepath, json.dumps(record, ensure_ascii=False, indent=2).encode())
-    return str(ts)
+    return filepath.stem
 
 
 def get_history(username: str, limit: int = 20) -> list[dict]:
