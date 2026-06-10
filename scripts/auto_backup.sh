@@ -2,6 +2,10 @@
 # LeKai 自动备份 — 每天凌晨执行，由 cron 调度
 # 备份目标: /mnt/backup/（第二块 SSD 挂载点）
 
+# 互斥锁：防止上一次备份未完成时 cron 再次触发
+exec 200>/var/lock/lekai_backup.lock
+flock -n 200 || exit 0
+
 BACKUP_DIR="/mnt/backup"
 RETENTION_DAYS=7
 TOKEN_FILE="/opt/lekai/.backup_token"

@@ -34,13 +34,15 @@ class _GroupsCtx:
                 self.data = {}
         return self.data
 
-    def __exit__(self, *args):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         try:
-            from security import atomic_write
-            atomic_write(GROUPS_FILE, json.dumps(self.data, ensure_ascii=False, indent=2).encode())
+            if exc_type is None:
+                from security import atomic_write
+                atomic_write(GROUPS_FILE, json.dumps(self.data, ensure_ascii=False, indent=2).encode())
         finally:
             fcntl.flock(self.fd, fcntl.LOCK_UN)
             self.fd.close()
+        return False
 
 
 def _load_groups() -> dict:

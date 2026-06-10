@@ -15,10 +15,14 @@ echo "恢复自: $LATEST"
 systemctl stop lekai-backend lekai-frontend 2>/dev/null || true
 
 cd "$APP_DIR"
+export LATEST
 python3 -c "
-import sys; sys.path.insert(0, 'backend')
+import os, sys
+sys.path.insert(0, 'backend')
 from backup import restore_backup
-ok, msg = restore_backup(open('$LATEST', 'rb').read())
+f = os.environ['LATEST']
+with open(f, 'rb') as fh:
+    ok, msg = restore_backup(fh.read())
 print(msg if ok else ('ERROR: ' + msg))
 "
 
