@@ -69,6 +69,19 @@ def require_auth(authorization: str = Header(default="")) -> str:
     return username
 
 
+def require_admin_or_reviewer(username: str = Depends(require_auth)) -> str:
+    role = get_user_role(username)
+    if role not in ("admin", "reviewer"):
+        raise HTTPException(status_code=403, detail="需要管理员或教研组长权限")
+    return username
+
+
+def require_admin(username: str = Depends(require_auth)) -> str:
+    if get_user_role(username) != "admin":
+        raise HTTPException(status_code=403, detail="需要管理员权限")
+    return username
+
+
 # ---- Models ----
 
 class AuthRequest(BaseModel):
@@ -400,17 +413,6 @@ async def review_submit(req: ReviewSubmitRequest, username: str = Depends(requir
 
 
 # ---- Admin API ----
-
-def require_admin_or_reviewer(username: str = Depends(require_auth)) -> str:
-    role = get_user_role(username)
-    if role not in ("admin", "reviewer"):
-        raise HTTPException(status_code=403, detail="需要管理员或教研组长权限")
-    return username
-
-def require_admin(username: str = Depends(require_auth)) -> str:
-    if get_user_role(username) != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    return username
 
 @app.get("/api/admin/dashboard")
 async def admin_dashboard(username: str = Depends(require_admin_or_reviewer)):
