@@ -100,20 +100,26 @@ else:
     data = r.json() if r.status_code == 200 else {}
     check("7. 入库失败时 ok=False", data.get("ok") is not True, str(data.get("message", ""))[:80])
 
-# ---- 8. 有效 token + 空参数触发 RuntimeError ─
+# ---- 8. 测试模式错误透出 ----
+os.environ["ACCEPT_FORCE_RAG_ERROR"] = "1"
 r = requests.post(f"{BASE}/api/generate",
-                  json={"grade": "", "lesson": "", "requirements": "", "class_hours": "1", "semester": ""},
+                  json={"grade": "三年级", "lesson": "测试课", "requirements": ""},
                   headers=admin_h)
+del os.environ["ACCEPT_FORCE_RAG_ERROR"]
 err_detail = r.json().get("detail", "")
-# 空课题应该返回"课题名称不能为空"，不是"API Key 未配置"
-check("8. 错误信息非统一 Key 未配置", "课题名称不能为空" in err_detail
-      or ("API Key" not in err_detail and r.status_code in (400, 500)),
-      err_detail[:80])
+check("8. RuntimeError 透出真实错误", "验收用错误" in err_detail, err_detail[:80])
+
+# ---- 9. 入库失败返回 ok:False ----
+r = requests.post(f"{BASE}/api/admin/upload-lesson",
+                  headers=admin_h,
+                  files={"file": ("force_ingest_fail_test.docx", io.BytesIO(b"x" * 200))})
+data = r.json() if r.status_code == 200 else {}
+check("9. 入库失败时 ok=False", data.get("ok") is not True, str(data.get("message", ""))[:80])
 
 # ---- 结果 ----
 print(f"\n{'='*40}")
 print(f"PASSED: {PASSED}  FAILED: {FAILED}")
-if FAILED == 0 and PASSED >= 8:
+if FAILED == 0 and PASSED >= 9:
     print("ACCEPTANCE PASSED")
     sys.exit(0)
 else:
