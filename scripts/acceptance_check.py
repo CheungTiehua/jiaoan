@@ -347,7 +347,7 @@ def cleanup_acceptance_artifacts():
                     print(f"  [CLEANUP] 已删除用户: {u}")
                     cleaned += 1
                 from pathlib import Path as _P
-                from security import atomic_write
+                from backend.security import atomic_write
                 atomic_write(_P(users_file), json.dumps(users, ensure_ascii=False, indent=2).encode())
         except Exception as e:
             warnings.append(f"清理 users.json 失败: {e}")
