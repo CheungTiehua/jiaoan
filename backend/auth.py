@@ -19,6 +19,27 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 USERS_FILE = DATA_DIR / "users.json"
 SESSIONS_FILE = DATA_DIR / "sessions.json"
+AUDIT_FILE = DATA_DIR / "audit.jsonl"
+
+
+def audit_log(username: str, role: str, action: str, target: str = "", success: bool = True, detail: str = ""):
+    """写入审计日志"""
+    import json as _ajson
+    _ajson.ensure_ascii = False  # type: ignore
+    entry = _ajson.dumps({
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "username": username,
+        "role": role,
+        "action": action,
+        "target": target,
+        "success": success,
+        "detail": detail,
+    }, ensure_ascii=False)
+    try:
+        with open(AUDIT_FILE, "a", encoding="utf-8") as f:
+            f.write(entry + "\n")
+    except Exception:
+        pass
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 

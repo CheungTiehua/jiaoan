@@ -21,7 +21,7 @@ from scripts.all_textbooks import GRADE_TEXTBOOKS
 from auth import (
     register_user, login_user, logout_user, get_user_from_token,
     list_users, save_history, get_history, get_history_detail,
-    get_user_role, save_history_mindmap,
+    get_user_role, save_history_mindmap, audit_log,
 )
 from admin_api import (
     submit_for_review, get_review_queue, get_review_detail,
@@ -277,6 +277,7 @@ async def register(req: AuthRequest, request: Request = None, username: str = De
     if check_rate_limit(f"reg_{client_ip}", 5, 300):
         raise HTTPException(status_code=429, detail="注册过于频繁，请5分钟后再试")
     ok, msg = register_user(req.username, req.password)
+    audit_log(username, role, "create_user", req.username, ok, msg)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"message": msg}
@@ -452,9 +453,37 @@ async def admin_set_role(req: dict, username: str = Depends(require_admin)):
     target = req.get("username", "")
     role = req.get("role", "")
     ok = set_user_role(target, role)
+    audit_log(username, "admin", "set_role", f"{target}->{role}", ok)
     if not ok:
         raise HTTPException(status_code=400, detail="设置失败")
     return {"message": f"已将 {target} 的角色设为 {role}"}
+
+
+@app.post("/api/admin/users/import")
+async def admin_import_users(req: dict, username: str = Depends(require_admin)):
+    """CSV 批量导入教师账号。CSV 格式：username,password"""
+    csv_text = str(req.get("csv", "")).strip()
+    if not csv_text:
+        raise HTTPException(status_code=400, detail="请提供 CSV 内容")
+
+    results = {"created": [], "failed": []}
+    for line_no, line in enumerate(csv_text.split("\n"), 1):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < 2:
+            results["failed"].append({"line": line_no, "reason": "格式错误，需要 username,password"})
+            continue
+        u, p = parts[0], parts[1]
+        ok, msg = register_user(u, p)
+        audit_log(username, "admin", "import_user", u, ok, msg)
+        if ok:
+            results["created"].append(u)
+        else:
+            results["failed"].append({"line": line_no, "username": u, "reason": msg})
+
+    return {"ok": True, "imported": len(results["created"]), "failed": len(results["failed"]), "results": results}
 
 
 # ---- 单元规划 API ----
@@ -570,6 +599,7 @@ async def admin_backup(username: str = Depends(require_admin)):
 async def admin_restore(file: UploadFile = FastAPIFile(...), username: str = Depends(require_admin)):
     data = await file.read()
     ok, msg = restore_backup(data)
+    audit_log(username, "admin", "restore_backup", file.filename or "unknown", ok, msg)
     if not ok:
         raise HTTPException(status_code=400, detail=msg)
     return {"ok": True, "message": msg}
@@ -606,6 +636,7 @@ async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
             cur[key] = str(req[key])[:5000]
     from security import atomic_write
     atomic_write(PROMPTS_FILE, _json.dumps(cur, ensure_ascii=False, indent=2).encode())
+    audit_log(username, "admin", "update_prompt", ", ".join(req.keys()))
     return {"ok": True, "message": "提示词已更新，立即生效"}
 
 
@@ -900,6 +931,8 @@ async def admin_upload_lesson(
             refresh_index()
         except Exception:
             pass
+        role = get_user_role(username)
+        audit_log(username, role, "ingest_lesson", lesson_name)
         return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
     except Exception:
         return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}
@@ -964,6 +997,7 @@ async def admin_delete_chunk(req: dict, username: str = Depends(require_admin)):
     col.delete(ids=[chunk_id])
     from search_engine import refresh_index
     refresh_index()
+    audit_log(username, "admin", "delete_chunk", chunk_id)
     return {"ok": True, "message": "已删除并刷新索引"}
 
 
