@@ -214,7 +214,7 @@ def outline_to_mermaid(outline: dict) -> str:
     title = _clean_node(outline.get("title", "思维导图"))
     lines = ["mindmap", f"  root(({title}))"]
     nodes = outline.get("nodes", [])
-    lines.extend(_render_nodes(nodes, depth=1))
+    lines.extend(_render_nodes(nodes, depth=2))
     return "\n".join(lines)
 
 
