@@ -758,6 +758,8 @@ async def export_plan(plan_id: str, format: str = "md", include_mindmap: str = "
     grade = detail.get("grade", "")
     include_mm = include_mindmap.lower() == "true"
 
+    from urllib.parse import quote
+
     if format == "md":
         full = plan_text
         if guide_text:
@@ -771,8 +773,9 @@ async def export_plan(plan_id: str, format: str = "md", include_mindmap: str = "
                 full += "\n\n# 附录：备课方法思维导图\n\n```mermaid\n" + (method_mm or "> 暂无思维导图") + "\n```"
 
         from fastapi.responses import Response
+        safe_fn = quote(f"{lesson}_教案.md")
         return Response(content=full.encode("utf-8"), media_type="text/markdown",
-                       headers={"Content-Disposition": f"attachment; filename={lesson}_教案.md"})
+                       headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_fn}"})
 
     elif format == "docx":
         from docx import Document
@@ -817,8 +820,9 @@ async def export_plan(plan_id: str, format: str = "md", include_mindmap: str = "
         buf = io.BytesIO()
         doc.save(buf)
         buf.seek(0)
+        safe_fn = quote(f"{lesson}_教案.docx")
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                headers={"Content-Disposition": f"attachment; filename={lesson}_教案.docx"})
+                                headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_fn}"})
 
     raise HTTPException(status_code=400, detail="仅支持 md / docx 格式")
 
