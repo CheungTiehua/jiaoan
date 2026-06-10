@@ -130,10 +130,151 @@ check("9. 入库失败时 ok=False",
       and "模拟入库失败" in str(data.get("message", "")),
       f"status={r.status_code}, body={str(data)[:120]}")
 
+# ============================================================
+# 思维导图验收
+# ============================================================
+
+teacher_h = {"Authorization": f"Bearer {teacher_token}"}
+SKIP_REAL_MINDMAP = os.environ.get("ACCEPT_SKIP_REAL_MINDMAP", "") == "1"
+
+# ---- 10. mindmap 接口必须登录 ----
+r = requests.post(f"{BASE}/api/mindmap/generate",
+                  json={"lesson": "测试", "lesson_plan": "x" * 100})
+check("10. mindmap requires auth", r.status_code in (401, 403), f"status={r.status_code}")
+
+# ---- 11. mindmap 空输入校验 ----
+r = requests.post(f"{BASE}/api/mindmap/generate",
+                  json={"lesson": "", "lesson_plan": ""},
+                  headers=teacher_h)
+check("11. mindmap validates empty input",
+      r.status_code == 400 and ("课题名称不能为空" in str(r.json().get("detail", ""))
+                                or "教案内容不能为空" in str(r.json().get("detail", ""))),
+      f"status={r.status_code}, detail={r.json().get('detail', '')[:60]}")
+
+# ---- 12. mindmap 太短教案校验 ----
+r = requests.post(f"{BASE}/api/mindmap/generate",
+                  json={"lesson": "测试课", "lesson_plan": "太短"},
+                  headers=teacher_h)
+check("12. mindmap validates short lesson_plan",
+      r.status_code == 400 and "教案内容过短" in str(r.json().get("detail", "")),
+      f"status={r.status_code}, detail={r.json().get('detail', '')[:60]}")
+
+# ---- 13. mindmap 测试钩子 ----
+r = requests.post(f"{BASE}/api/mindmap/generate",
+                  json={"lesson": "测试课", "lesson_plan": "x" * 100},
+                  headers={**admin_h, "X-Accept-Force-Mindmap-Error": "1"})
+err_detail = r.json().get("detail", "")
+check("13. mindmap forced error surfaces detail",
+      r.status_code == 400 and "验收用错误" in err_detail,
+      f"status={r.status_code}, detail={err_detail[:60]}")
+
+# ---- 14. mindmap 正常双导图生成 ----
+mindmap_record_id = None
+if not SKIP_REAL_MINDMAP:
+    test_plan = (
+        "这是验收测试教案内容。" * 20
+        + "\n## 教学目标\n1. 认识生字。\n2. 朗读课文。\n3. 体会情感。"
+        + "\n## 教学流程\n导入激趣、初读感知、精读品味、拓展延伸。"
+        + "\n## 板书设计\n课题 + 关键词"
+        + "\n## 作业\n背诵课文"
+    )
+    test_guide = (
+        "教案辅导说明。" * 20
+        + "\n先看单元语文要素，再看课后习题反推目标。"
+    )
+    r = requests.post(f"{BASE}/api/mindmap/generate",
+                      json={"grade": "三年级", "lesson": "验收测试课",
+                            "lesson_plan": test_plan, "teaching_guide": test_guide},
+                      headers=teacher_h)
+    if r.status_code == 200:
+        data = r.json()
+        has_lesson = "lesson_mindmap_mermaid" in data and data["lesson_mindmap_mermaid"].startswith("mindmap")
+        has_method = "method_mindmap_mermaid" in data and data["method_mindmap_mermaid"].startswith("mindmap")
+        has_outline = "lesson_outline" in data and "method_outline" in data
+
+        lesson_mm = data.get("lesson_mindmap_mermaid", "")
+        method_mm = data.get("method_mindmap_mermaid", "")
+
+        lesson_kw_ok = sum(1 for kw in ["教学目标", "教学流程", "板书", "作业"] if kw in lesson_mm) >= 2
+        method_kw_ok = sum(1 for kw in ["备课", "方法", "目标提炼", "可迁移", "常见误区"] if kw in method_mm) >= 2
+
+        ok = has_lesson and has_method and has_outline and lesson_kw_ok and method_kw_ok
+        check("14. mindmap generates dual maps", ok,
+              f"lesson_ok={has_lesson}, method_ok={has_method}, outline_ok={has_outline}, lesson_kw={lesson_kw_ok}, method_kw={method_kw_ok}")
+
+        # 记录 record_id 用于后续历史保存验收
+        # 需要先从生成教案中获得 record_id，这里使用 admin 生成一个测试教案
+        if ok:
+            r_gen = requests.post(f"{BASE}/api/generate",
+                                  json={"grade": "三年级", "lesson": "验收测试课", "requirements": "",
+                                        "class_hours": "1", "semester": "上"},
+                                  headers=teacher_h)
+            if r_gen.status_code == 200:
+                mindmap_record_id = r_gen.json().get("record_id", "")
+    else:
+        detail = r.json().get("detail", str(r.status_code))
+        check("14. mindmap generates dual maps", False, detail)
+else:
+    print("  ⏭️  14. mindmap generates dual maps (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
+
+# ---- 15. mindmap 历史保存 ----
+if mindmap_record_id:
+    r = requests.post(f"{BASE}/api/history/{mindmap_record_id}/mindmap",
+                      json={"lesson_mindmap_mermaid": "mindmap\n  root((测试教案导图))\n    教学目标\n    教学流程",
+                            "method_mindmap_mermaid": "mindmap\n  root((测试备课方法导图))\n    备课方法\n    可迁移经验"},
+                      headers=teacher_h)
+    if r.status_code == 200:
+        # 读回验证
+        r2 = requests.get(f"{BASE}/api/history/{mindmap_record_id}", headers=teacher_h)
+        if r2.status_code == 200:
+            d2 = r2.json()
+            has_saved_lesson = "mindmap" in d2.get("lesson_mindmap_mermaid", "")
+            has_saved_method = "mindmap" in d2.get("method_mindmap_mermaid", "")
+            check("15. mindmap persists to history",
+                  has_saved_lesson and has_saved_method,
+                  f"lesson_saved={has_saved_lesson}, method_saved={has_saved_method}")
+        else:
+            check("15. mindmap persists to history", False, "history read failed")
+    else:
+        check("15. mindmap persists to history", False, f"save failed: status={r.status_code}")
+else:
+    if not SKIP_REAL_MINDMAP:
+        check("15. mindmap persists to history", False, "no record_id from mindmap generation")
+
+# ---- 16. mindmap 导出附录（MD） ----
+if mindmap_record_id:
+    r = requests.get(f"{BASE}/api/export/{mindmap_record_id}?format=md&include_mindmap=true",
+                     headers=teacher_h)
+    if r.status_code == 200:
+        body = r.text
+        has_lesson_appendix = "附录：教案思维导图" in body
+        has_method_appendix = "附录：备课方法思维导图" in body
+        check("16. mindmap appendix exported in markdown",
+              has_lesson_appendix and has_method_appendix,
+              f"lesson_appendix={has_lesson_appendix}, method_appendix={has_method_appendix}")
+    else:
+        check("16. mindmap appendix exported in markdown", False, f"status={r.status_code}")
+else:
+    if not SKIP_REAL_MINDMAP:
+        check("16. mindmap appendix exported in markdown", False, "no record_id")
+
+# ---- 17. mindmap 导出附录（DOCX） ----
+if mindmap_record_id:
+    r = requests.get(f"{BASE}/api/export/{mindmap_record_id}?format=docx&include_mindmap=true",
+                     headers=teacher_h)
+    ok = r.status_code == 200 and len(r.content) > 1000
+    check("17. mindmap appendix exported in docx", ok,
+          f"status={r.status_code}, size={len(r.content)}")
+else:
+    if not SKIP_REAL_MINDMAP:
+        check("17. mindmap appendix exported in docx", False, "no record_id")
+
 # ---- 结果 ----
 print(f"\n{'='*40}")
 print(f"PASSED: {PASSED}  FAILED: {FAILED}")
-if FAILED == 0 and PASSED >= 9:
+
+MIN_PASS = 17 if not SKIP_REAL_MINDMAP else 12
+if FAILED == 0 and PASSED >= MIN_PASS:
     print("ACCEPTANCE PASSED")
     sys.exit(0)
 else:
