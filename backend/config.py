@@ -51,3 +51,6 @@ def get_device_mac() -> str:
 
 # Prompt 配置文件路径
 PROMPTS_FILE = PROJECT_ROOT / "data" / ".system_prompts"
+
+# 验收模式开关（仅交付验收时临时开启，正式生产必须关闭）
+LEKAI_ACCEPTANCE_MODE = os.getenv("LEKAI_ACCEPTANCE_MODE", "0") == "1"

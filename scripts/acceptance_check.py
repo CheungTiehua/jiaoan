@@ -2,17 +2,21 @@
 """
 LeKai 交付验收脚本
 用法:
-  ACCEPT_ADMIN_USER=admin ACCEPT_ADMIN_PASSWORD=xxx python scripts/acceptance_check.py
+  LEKAI_ACCEPTANCE_MODE=1 ACCEPT_ADMIN_USER=admin ACCEPT_ADMIN_PASSWORD=xxx python scripts/acceptance_check.py
 
 环境变量:
-  ACCEPT_ADMIN_USER     已有管理员账号
-  ACCEPT_ADMIN_PASSWORD 管理员密码
-  ACCEPT_BASE_URL       后端地址（默认 http://127.0.0.1:8000）
+  LEKAI_ACCEPTANCE_MODE  必须设为 1（验收模式开关，保护正式环境）
+  ACCEPT_ADMIN_USER      已有管理员账号
+  ACCEPT_ADMIN_PASSWORD  管理员密码
+  ACCEPT_BASE_URL        后端地址（默认 http://127.0.0.1:8000）
+  ACCEPT_SKIP_REAL_MINDMAP 设为 1 跳过真实思维导图生成
 """
 
 import json
 import io
 import os
+import re
+import shutil
 import sys
 import requests
 import zipfile
@@ -23,7 +27,11 @@ BASE = os.environ.get("ACCEPT_BASE_URL", "http://127.0.0.1:8000")
 
 if not ADMIN_USER or not ADMIN_PASS:
     print("错误: 请设置环境变量 ACCEPT_ADMIN_USER 和 ACCEPT_ADMIN_PASSWORD")
-    print("用法: ACCEPT_ADMIN_USER=admin ACCEPT_ADMIN_PASSWORD=xxx python scripts/acceptance_check.py")
+    print("用法: LEKAI_ACCEPTANCE_MODE=1 ACCEPT_ADMIN_USER=admin ACCEPT_ADMIN_PASSWORD=xxx python scripts/acceptance_check.py")
+    sys.exit(2)
+
+if os.environ.get("LEKAI_ACCEPTANCE_MODE", "0") != "1":
+    print("错误: 请设置 LEKAI_ACCEPTANCE_MODE=1 后再运行验收脚本")
     sys.exit(2)
 
 FAILED = 0
@@ -275,13 +283,113 @@ else:
     else:
         print("  ⏭️  17. mindmap appendix exported in docx (skipped, ACCEPT_SKIP_REAL_MINDMAP=1)")
 
+# ---- 清理验收测试数据 ----
+def cleanup_acceptance_artifacts():
+    """清理 acctest_ 开头的测试用户及相关数据"""
+    import glob as _glob
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cleaned = 0
+    warnings = []
+
+    users_file = os.path.join(project_root, "data", "users.json")
+    sessions_file = os.path.join(project_root, "data", "sessions.json")
+    history_dir = os.path.join(project_root, "data", "history")
+    reviews_dir = os.path.join(project_root, "data", "reviews")
+    feedback_dir = os.path.join(project_root, "data", "feedback")
+
+    # 1. 清理测试用户历史目录
+    if os.path.isdir(history_dir):
+        for d in os.listdir(history_dir):
+            if d.startswith("acctest_"):
+                path = os.path.join(history_dir, d)
+                if os.path.isdir(path):
+                    try:
+                        shutil.rmtree(path)
+                        print(f"  [CLEANUP] 已删除历史目录: {d}")
+                        cleaned += 1
+                    except Exception as e:
+                        warnings.append(f"删除历史目录失败 {d}: {e}")
+
+    # 2. 清理测试反馈记录
+    if os.path.isdir(feedback_dir):
+        for f in os.listdir(feedback_dir):
+            if f.startswith("acctest_"):
+                path = os.path.join(feedback_dir, f)
+                try:
+                    os.remove(path)
+                    print(f"  [CLEANUP] 已删除反馈记录: {f}")
+                    cleaned += 1
+                except Exception as e:
+                    warnings.append(f"删除反馈记录失败 {f}: {e}")
+
+    # 3. 清理测试审核记录
+    if os.path.isdir(reviews_dir):
+        for f in os.listdir(reviews_dir):
+            if f.endswith(".json"):
+                path = os.path.join(reviews_dir, f)
+                try:
+                    with open(path, "r") as fh:
+                        data = json.loads(fh.read())
+                    if isinstance(data, dict) and str(data.get("username", "")).startswith("acctest_"):
+                        os.remove(path)
+                        print(f"  [CLEANUP] 已删除审核记录: {f}")
+                        cleaned += 1
+                except Exception as e:
+                    warnings.append(f"删除审核记录失败 {f}: {e}")
+
+    # 4. 清理 users.json 中测试用户
+    if os.path.exists(users_file):
+        try:
+            with open(users_file, "r") as fh:
+                users = json.loads(fh.read())
+            test_users = [u for u in users if u.startswith("acctest_")]
+            if test_users:
+                for u in test_users:
+                    del users[u]
+                    print(f"  [CLEANUP] 已删除用户: {u}")
+                    cleaned += 1
+                with open(users_file, "w") as fh:
+                    json.dump(users, fh, ensure_ascii=False, indent=2)
+        except Exception as e:
+            warnings.append(f"清理 users.json 失败: {e}")
+
+    # 5. 清理 sessions.json 中测试 session
+    if os.path.exists(sessions_file):
+        try:
+            with open(sessions_file, "r") as fh:
+                sessions = json.loads(fh.read())
+            test_sessions = [k for k, v in sessions.items()
+                           if isinstance(v, dict) and str(v.get("username", "")).startswith("acctest_")]
+            for k in test_sessions:
+                del sessions[k]
+                cleaned += 1
+            if test_sessions:
+                with open(sessions_file, "w") as fh:
+                    json.dump(sessions, fh, ensure_ascii=False, indent=2)
+                print(f"  [CLEANUP] 已清理 {len(test_sessions)} 个 acctest session")
+        except Exception as e:
+            warnings.append(f"清理 sessions.json 失败: {e}")
+
+    if warnings:
+        for w in warnings:
+            print(f"  [WARN] cleanup failed: {w}")
+    if cleaned > 0:
+        print(f"  [PASS] cleanup acceptance artifacts ({cleaned} items)")
+    return len(warnings) == 0
+
+
 # ---- 结果 ----
 print(f"\n{'='*40}")
 print(f"PASSED: {PASSED}  FAILED: {FAILED}")
 
+cleanup_ok = cleanup_acceptance_artifacts()
+
 MIN_PASS = 17 if not SKIP_REAL_MINDMAP else 12
 if FAILED == 0 and PASSED >= MIN_PASS:
-    print("ACCEPTANCE PASSED")
+    if not cleanup_ok:
+        print("ACCEPTANCE PASSED WITH CLEANUP WARNINGS")
+    else:
+        print("ACCEPTANCE PASSED")
     sys.exit(0)
 else:
     print("ACCEPTANCE FAILED")

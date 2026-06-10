@@ -77,12 +77,15 @@
 
 - [ ] 12. 运行验收脚本
   ```bash
+  LEKAI_ACCEPTANCE_MODE=1 \
   ACCEPT_BASE_URL=http://127.0.0.1:8000 \
   ACCEPT_ADMIN_USER=admin \
   ACCEPT_ADMIN_PASSWORD=<管理员密码> \
   python scripts/acceptance_check.py
   ```
   确认输出 `ACCEPTANCE PASSED`。
+  验收完成后确认 `LEKAI_ACCEPTANCE_MODE` 已关闭。
+  确认系统中没有 `acctest_` 测试账号。
 
 - [ ] 13. 创建测试教师账号
   管理端 → "用户管理" → 创建 `test_teacher` 账号。

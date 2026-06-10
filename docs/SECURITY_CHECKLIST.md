@@ -50,6 +50,9 @@
 
 ## 部署安全
 
+- [ ] 正式生产环境未开启 `LEKAI_ACCEPTANCE_MODE`
+- [ ] 验收测试账号 `acctest_` 不存在于正式用户列表
+- [ ] 验收测试钩子在生产模式下不可触发
 - [ ] Docker 容器以非 root 用户运行
 - [ ] 敏感文件权限 600（`.env`、`data/api_key.json`、`data/users.json`）
 - [ ] 生产环境移除开发调试信息

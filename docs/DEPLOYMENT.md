@@ -138,3 +138,16 @@ ufw allow 80/tcp
 firewall-cmd --add-port=80/tcp --permanent
 firewall-cmd --reload
 ```
+
+## 验收模式（仅交付时使用）
+
+`LEKAI_ACCEPTANCE_MODE` 是验收测试钩子的开关。**正式部署不要开启。** 只有交付验收时临时开启，验收完成后关闭并重启后端。
+
+```bash
+# Docker Compose 中临时开启（验收后移除）
+# 在 docker-compose.yml 的 backend environment 中：
+# - LEKAI_ACCEPTANCE_MODE=${LEKAI_ACCEPTANCE_MODE:-0}
+
+# 运行时临时设置：
+LEKAI_ACCEPTANCE_MODE=1 docker compose up -d backend
+```

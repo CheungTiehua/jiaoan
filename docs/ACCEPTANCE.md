@@ -10,25 +10,42 @@
 
 | 变量 | 必填 | 默认值 | 说明 |
 |------|------|------|------|
+| `LEKAI_ACCEPTANCE_MODE` | 是 | `0` | 必须设为 `1`（验收模式开关） |
 | `ACCEPT_ADMIN_USER` | 是 | - | 管理员用户名 |
 | `ACCEPT_ADMIN_PASSWORD` | 是 | - | 管理员密码 |
 | `ACCEPT_BASE_URL` | 否 | `http://127.0.0.1:8000` | 后端地址 |
+| `ACCEPT_SKIP_REAL_MINDMAP` | 否 | - | 设为 `1` 跳过真实导图生成 |
+
+> 正式生产环境默认关闭 `LEKAI_ACCEPTANCE_MODE`，仅交付验收时临时开启，验收完成后关闭并重启后端。
 
 ## 运行命令
 
 ```bash
 # 本地运行
-ACCEPT_ADMIN_USER=admin ACCEPT_ADMIN_PASSWORD=你的密码 python scripts/acceptance_check.py
+LEKAI_ACCEPTANCE_MODE=1 \
+ACCEPT_ADMIN_USER=admin \
+ACCEPT_ADMIN_PASSWORD=你的密码 \
+python scripts/acceptance_check.py
 
 # 指定后端地址
+LEKAI_ACCEPTANCE_MODE=1 \
 ACCEPT_BASE_URL=http://127.0.0.1:8000 \
 ACCEPT_ADMIN_USER=admin \
 ACCEPT_ADMIN_PASSWORD=你的密码 \
 python scripts/acceptance_check.py
 
-# Docker 环境
-docker compose exec backend python scripts/acceptance_check.py  # 需要先设置环境变量
+# 跳过真实导图生成
+LEKAI_ACCEPTANCE_MODE=1 \
+ACCEPT_SKIP_REAL_MINDMAP=1 \
+ACCEPT_ADMIN_USER=admin \
+ACCEPT_ADMIN_PASSWORD=你的密码 \
+python scripts/acceptance_check.py
+
+# Docker 环境（给后端容器设置 LEKAI_ACCEPTANCE_MODE=1）
+docker compose exec -e LEKAI_ACCEPTANCE_MODE=1 backend python scripts/acceptance_check.py
 ```
+
+验收结束后脚本会自动清理 `acctest_` 开头的测试用户、历史记录、审核记录和 session。清理失败不影响验收结论，但会输出 `[WARN]` 提示。
 
 ## 验收项目说明
 

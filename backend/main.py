@@ -32,7 +32,7 @@ from collab import (
     share_plan, get_group_plans, assign_task, get_group_tasks,
     complete_task, add_comment,
 )
-from config import VERSION, PROMPTS_FILE
+from config import VERSION, PROMPTS_FILE, LEKAI_ACCEPTANCE_MODE
 from security import check_rate_limit
 from health import get_health
 from backup import create_backup, restore_backup
@@ -329,7 +329,8 @@ async def generate(
     try:
         # 验收测试钩子：仅管理员可通过请求头触发
         if (
-            x_accept_force_rag_error == "1"
+            LEKAI_ACCEPTANCE_MODE
+            and x_accept_force_rag_error == "1"
             and get_user_role(username) == "admin"
         ):
             raise RuntimeError("验收用错误：模拟 RAG 调用失败")
@@ -679,7 +680,8 @@ async def generate_mindmap(
     try:
         # 验收测试钩子：仅管理员可通过请求头触发
         if (
-            x_accept_force_mindmap_error == "1"
+            LEKAI_ACCEPTANCE_MODE
+            and x_accept_force_mindmap_error == "1"
             and get_user_role(username) == "admin"
         ):
             raise RuntimeError("验收用错误：模拟思维导图生成失败")
@@ -854,8 +856,8 @@ async def admin_upload_lesson(
     match = re.search(r'《(.+?)》', content)
     lesson_name = match.group(1) if match else Path(fn).stem
 
-    # 测试钩子：文件名含 force_ingest_fail 时模拟入库失败（放在文件写入和子进程入库之前）
-    if "force_ingest_fail" in fn.lower():
+    # 测试钩子：文件名含 force_ingest_fail 时模拟入库失败（仅验收模式下生效）
+    if LEKAI_ACCEPTANCE_MODE and "force_ingest_fail" in fn.lower() and get_user_role(username) in ("admin", "reviewer"):
         return {"ok": False, "lesson": lesson_name, "message": f"验收用：模拟入库失败"}
 
     # 尝试用 DeepSeek 格式化为标准模板
