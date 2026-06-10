@@ -85,6 +85,7 @@ LEKAI_ACCEPTANCE_MODE=0 docker compose up -d --force-recreate backend
 如果不想消耗 DeepSeek API 额度：
 
 ```bash
+LEKAI_ACCEPTANCE_MODE=1 \
 ACCEPT_SKIP_REAL_MINDMAP=1 \
 ACCEPT_ADMIN_USER=admin \
 ACCEPT_ADMIN_PASSWORD=你的密码 \

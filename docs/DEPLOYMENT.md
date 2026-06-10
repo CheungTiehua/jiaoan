@@ -141,13 +141,19 @@ firewall-cmd --reload
 
 ## 验收模式（仅交付时使用）
 
-`LEKAI_ACCEPTANCE_MODE` 是验收测试钩子的开关。**正式部署不要开启。** 只有交付验收时临时开启，验收完成后关闭并重启后端。
+`LEKAI_ACCEPTANCE_MODE` 是验收测试钩子的开关。**正式生产环境默认必须保持 0（关闭）。**
+
+只有交付验收时临时设置为 1，验收完成后必须恢复为 0 并重建后端容器。
 
 ```bash
-# Docker Compose 中临时开启（验收后移除）
-# 在 docker-compose.yml 的 backend environment 中：
-# - LEKAI_ACCEPTANCE_MODE=${LEKAI_ACCEPTANCE_MODE:-0}
+# 开启验收模式（仅验收时）
+LEKAI_ACCEPTANCE_MODE=1 docker compose up -d --force-recreate backend
 
-# 运行时临时设置：
-LEKAI_ACCEPTANCE_MODE=1 docker compose up -d backend
+# 运行验收脚本
+LEKAI_ACCEPTANCE_MODE=1 ACCEPT_ADMIN_USER=admin ACCEPT_ADMIN_PASSWORD=xxx python scripts/acceptance_check.py
+
+# 验收完成后关闭验收模式并重建后端
+LEKAI_ACCEPTANCE_MODE=0 docker compose up -d --force-recreate backend
 ```
+
+> 不要把 `LEKAI_ACCEPTANCE_MODE=1` 长期留在 `.env` 文件中。验收后应立即恢复为 `0`。
