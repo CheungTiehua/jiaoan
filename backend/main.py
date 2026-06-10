@@ -38,6 +38,7 @@ from health import get_health
 from backup import create_backup, restore_backup
 from feedback import submit_feedback, get_feedback, get_stats as get_feedback_stats
 from annotation import add_annotation, get_annotations, get_stats as get_annotation_stats
+from mindmap import generate_dual_mindmap
 from fastapi import UploadFile, File as FastAPIFile
 
 app = FastAPI(
@@ -99,6 +100,22 @@ class ReviseRequest(BaseModel):
 
 class ReviseResponse(BaseModel):
     lesson_plan: str
+
+
+class MindmapGenerateRequest(BaseModel):
+    grade: str = ""
+    lesson: str
+    lesson_plan: str
+    teaching_guide: str = ""
+    analysis: str = ""
+    peer_reference: str = ""
+
+
+class MindmapGenerateResponse(BaseModel):
+    lesson_mindmap_mermaid: str
+    method_mindmap_mermaid: str
+    lesson_outline: dict
+    method_outline: dict
 
 
 # ---- Public API ----
@@ -616,6 +633,39 @@ async def api_get_annotations(review_id: str, username: str = Depends(require_ad
 @app.get("/api/admin/annotation-stats")
 async def admin_annotation_stats(username: str = Depends(require_admin_or_reviewer)):
     return get_annotation_stats()
+
+
+# ---- 思维导图生成 ----
+
+@app.post("/api/mindmap/generate", response_model=MindmapGenerateResponse)
+async def generate_mindmap(
+    req: MindmapGenerateRequest,
+    username: str = Depends(require_auth),
+    x_accept_force_mindmap_error: str = Header(default="", alias="X-Accept-Force-Mindmap-Error")
+):
+    if not req.lesson.strip():
+        raise HTTPException(status_code=400, detail="课题名称不能为空")
+    if not req.lesson_plan.strip():
+        raise HTTPException(status_code=400, detail="教案内容不能为空")
+    if len(req.lesson_plan.strip()) < 100:
+        raise HTTPException(status_code=400, detail="教案内容过短，无法生成思维导图")
+
+    try:
+        # 验收测试钩子：仅管理员可通过请求头触发
+        if (
+            x_accept_force_mindmap_error == "1"
+            and get_user_role(username) == "admin"
+        ):
+            raise RuntimeError("验收用错误：模拟思维导图生成失败")
+
+        result = generate_dual_mindmap(req)
+        return MindmapGenerateResponse(**result)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        import traceback, logging
+        logging.getLogger("lekai").error("思维导图生成失败:\n%s", traceback.format_exc())
+        raise HTTPException(status_code=500, detail="思维导图生成失败，请稍后重试")
 
 
 # ---- 教案评价（老师上传自己的教案，AI对照知识库评价） ----
