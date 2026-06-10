@@ -337,6 +337,35 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                   }} className="bg-amber-600 text-white text-sm px-3 py-1 rounded">创建</button>
                 </div>
               </div>
+
+              {/* Batch Import Users */}
+              <div className="bg-white rounded-lg border p-4 mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 mb-2">📋 批量导入教师</h3>
+                <p className="text-xs text-gray-400 mb-2">CSV 格式：每行一个用户，逗号分隔用户名和密码</p>
+                <textarea id="csv-input" rows={4} placeholder={"张老师,zhang123\n李老师,li123\n王老师,wang123"}
+                  className="w-full border rounded px-3 py-2 text-xs font-mono mb-2" />
+                <div className="flex gap-2 items-center">
+                  <button onClick={async () => {
+                    const csv = (document.getElementById("csv-input") as HTMLTextAreaElement)?.value;
+                    if (!csv.trim()) { alert("请输入 CSV 内容"); return; }
+                    try {
+                      const res = await fetch(`${API}/admin/users/import`, { method: "POST", headers, body: JSON.stringify({ csv }) });
+                      const d = await res.json();
+                      if (d.ok) {
+                        let msg = `导入完成：成功 ${d.imported} 人`;
+                        if (d.failed > 0) {
+                          msg += `，失败 ${d.failed} 人：` + d.results.failed.map((f: any) => f.username || f.line).join(", ");
+                        }
+                        alert(msg);
+                        loadDashboard();
+                      } else {
+                        alert(d.detail || "导入失败");
+                      }
+                    } catch { alert("网络错误"); }
+                  }} className="bg-green-600 text-white text-sm px-3 py-1 rounded hover:bg-green-700">批量导入</button>
+                  <span className="text-xs text-gray-400">示例：用户名,密码</span>
+                </div>
+              </div>
               <div className="bg-white rounded-lg border p-4 mb-4">
                 <div className="flex gap-3 items-end">
                   <div>
