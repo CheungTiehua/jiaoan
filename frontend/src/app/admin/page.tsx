@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 export default function AdminPage() {
+  const router = useRouter();
   const [token, setToken] = useState("");
   const [username, setUsername] = useState("");
   const [role, setRole] = useState("");
@@ -35,7 +37,7 @@ export default function AdminPage() {
     if (t) {
       fetch("/api/me", { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()).then(d => {
         if (d.role && !["admin", "reviewer"].includes(d.role)) {
-          window.location.href = "/";
+          router.push("/");
         }
       }).catch(() => {});
     }
