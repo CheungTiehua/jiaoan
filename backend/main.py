@@ -1,6 +1,9 @@
 """LeKai教案系统(K9-AI版) — v1.0"""
 
 import io
+import logging
+
+_log = logging.getLogger("lekai")
 import json as _json
 import sys
 from pathlib import Path
@@ -540,9 +543,8 @@ async def admin_get_prompts(username: str = Depends(require_admin_or_reviewer)):
     if PROMPTS_FILE.exists():
         try:
             return _json.loads(PROMPTS_FILE.read_text())
-        except Exception:
-            import logging
-            logging.getLogger("lekai").warning("Prompt配置文件损坏，已重置: %s", PROMPTS_FILE.name)
+        except (_json.JSONDecodeError, OSError):
+            _log.warning("Prompt配置文件损坏，已重置: %s", PROMPTS_FILE.name)
     return {"chat_prompt": "", "audit_prompt": ""}
 
 
@@ -552,9 +554,8 @@ async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
     if PROMPTS_FILE.exists():
         try:
             cur = _json.loads(PROMPTS_FILE.read_text())
-        except Exception:
-            import logging
-            logging.getLogger("lekai").warning("Prompt配置文件损坏，备份后重置: %s", PROMPTS_FILE.name)
+        except (_json.JSONDecodeError, OSError):
+            _log.warning("Prompt配置文件损坏，备份后重置: %s", PROMPTS_FILE.name)
             try:
                 import shutil
                 shutil.copy2(PROMPTS_FILE, PROMPTS_FILE.with_suffix(".corrupted"))
