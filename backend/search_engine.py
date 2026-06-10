@@ -5,6 +5,7 @@
 """
 
 import hashlib
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -17,16 +18,34 @@ _embedding_model = None
 _chroma_collection = None
 _bm25_corpus: Optional[dict] = None  # {doc_id: tokenized_text}
 
+MODEL_NAME = "BAAI/bge-small-zh-v1.5"
+
 
 def get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
         from sentence_transformers import SentenceTransformer
         project_root = Path(__file__).resolve().parent.parent
-        _embedding_model = SentenceTransformer(
-            "BAAI/bge-small-zh-v1.5",
-            cache_folder=str(project_root / ".cache" / "models")
-        )
+
+        # 优先使用 LEKAI_MODEL_DIR 环境变量指定的本地模型目录
+        local_model_dir = os.environ.get("LEKAI_MODEL_DIR", "")
+        if local_model_dir and Path(local_model_dir).exists():
+            try:
+                _embedding_model = SentenceTransformer(local_model_dir)
+                return _embedding_model
+            except Exception:
+                pass  # 本地目录加载失败，回退到默认方式
+
+        try:
+            _embedding_model = SentenceTransformer(
+                MODEL_NAME,
+                cache_folder=str(project_root / ".cache" / "models")
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Embedding 模型加载失败，请检查 LEKAI_MODEL_DIR 或网络连接: {e}"
+            ) from e
+
     return _embedding_model
 
 
