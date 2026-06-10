@@ -778,6 +778,12 @@ async def admin_upload_lesson(
             import logging
             logging.getLogger("lekai").error("入库失败: %s", (result.stderr or result.stdout or "")[:500])
             return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》入库失败，请查看服务端日志"}
+        # 刷新主进程 BM25 索引
+        try:
+            from search_engine import refresh_index
+            refresh_index()
+        except Exception:
+            pass
         return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
     except Exception:
         return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}
