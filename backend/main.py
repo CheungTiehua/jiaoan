@@ -541,7 +541,8 @@ async def admin_get_prompts(username: str = Depends(require_admin_or_reviewer)):
         try:
             return _json.loads(PROMPTS_FILE.read_text())
         except Exception:
-            pass
+            import logging
+            logging.getLogger("lekai").warning("Prompt配置文件损坏，已重置: %s", PROMPTS_FILE.name)
     return {"chat_prompt": "", "audit_prompt": ""}
 
 
@@ -552,7 +553,13 @@ async def admin_set_prompts(req: dict, username: str = Depends(require_admin)):
         try:
             cur = _json.loads(PROMPTS_FILE.read_text())
         except Exception:
-            pass
+            import logging
+            logging.getLogger("lekai").warning("Prompt配置文件损坏，备份后重置: %s", PROMPTS_FILE.name)
+            try:
+                import shutil
+                shutil.copy2(PROMPTS_FILE, PROMPTS_FILE.with_suffix(".corrupted"))
+            except Exception:
+                pass
     for key in ("chat_prompt", "audit_prompt"):
         if key in req:
             cur[key] = str(req[key])[:5000]

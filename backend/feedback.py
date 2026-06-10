@@ -60,8 +60,8 @@ def get_feedback(plan_id: str) -> dict | None:
     for f in matches:
         try:
             return json.loads(f.read_text())
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            _log.warning("读取反馈文件失败: %s: %s", f.name, e)
     return None
 
 
@@ -78,8 +78,8 @@ def get_stats() -> dict:
             for t in d.get("tags", []):
                 tags_count[t] += 1
             total += 1
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            _log.warning("读取反馈文件失败: %s: %s", f.name, e)
     return {
         "total_feedbacks": total,
         "avg_rating": round(
