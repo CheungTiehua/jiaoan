@@ -20,13 +20,13 @@ RUN mkdir -p /app/data /app/chroma_db /app/.cache /app/knowledge-base \
     && useradd -m -u 10001 lekai \
     && chown -R lekai:lekai /app
 
-# 预下载 Embedding 模型（失败不阻塞构建）
+USER lekai
+
+# 预下载 Embedding 模型（失败不阻塞构建，以 lekai 身份运行确保文件权限正确）
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('BAAI/bge-small-zh-v1.5', cache_folder='/app/.cache/models')" 2>/dev/null || echo "模型下载跳过（构建时网络不可用，首次运行时会自动下载）"
 
 ENV DEEPSEEK_API_KEY=""
 ENV DEEPSEEK_BASE_URL="https://api.deepseek.com"
-
-USER lekai
 
 EXPOSE 8000
 

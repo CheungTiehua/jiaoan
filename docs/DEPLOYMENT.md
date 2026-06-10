@@ -15,7 +15,15 @@ cp .env.example .env
 # 编辑 .env 填入 DeepSeek API Key
 ```
 
-### 2. 构建并启动
+### 2. 准备数据目录
+
+```bash
+mkdir -p data knowledge-base
+```
+
+确保部署用户对这些目录有读写权限。Docker 容器内以 `lekai` (uid=10001) 用户运行。
+
+### 3. 构建并启动
 
 ```bash
 docker compose up -d --build
@@ -23,7 +31,7 @@ docker compose up -d --build
 
 首次构建约需 3-5 分钟（包含 embedding 模型下载）。
 
-### 3. 首次初始化
+### 4. 首次初始化
 
 启动后访问 `http://<服务器IP>/` 进入首次启动向导：
 
@@ -31,7 +39,7 @@ docker compose up -d --build
 2. 输入 DeepSeek API Key
 3. 完成后自动创建 `admin` 账号
 
-### 4. 验证服务
+### 5. 验证服务
 
 ```bash
 # 后端健康检查
