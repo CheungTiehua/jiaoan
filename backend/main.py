@@ -282,20 +282,27 @@ async def me(authorization: str = Header(default="")):
 # ---- Protected API ----
 
 @app.post("/api/generate", response_model=GenerateResponse)
-async def generate(req: GenerateRequest, request: Request, username: str = Depends(require_auth)):
+async def generate(
+    req: GenerateRequest,
+    request: Request,
+    username: str = Depends(require_auth),
+    x_accept_force_rag_error: str = Header(default="", alias="X-Accept-Force-Rag-Error")
+):
     if not req.lesson.strip():
         raise HTTPException(status_code=400, detail="课题名称不能为空")
-
-    # 测试模式：环境变量触发可控错误
-    import os as _os_gen
-    if _os_gen.environ.get("ACCEPT_FORCE_RAG_ERROR") == "1":
-        raise RuntimeError("验收用错误：模拟 RAG 调用失败")
 
     # 生成端点速率限制
     from security import check_rate_limit
     if check_rate_limit(f"gen_{username}", 20, 60):
         raise HTTPException(status_code=429, detail="请求过于频繁，请稍后再试")
     try:
+        # 验收测试钩子：仅管理员可通过请求头触发
+        if (
+            x_accept_force_rag_error == "1"
+            and get_user_role(username) == "admin"
+        ):
+            raise RuntimeError("验收用错误：模拟 RAG 调用失败")
+
         result = generate_lesson(
             grade=req.grade, lesson=req.lesson.strip(),
             requirements=req.requirements.strip(),
@@ -754,16 +761,16 @@ async def admin_upload_lesson(
     match = re.search(r'《(.+?)》', formatted)
     lesson_name = match.group(1) if match else Path(fn).stem
 
+    # 测试钩子：文件名含 force_ingest_fail 时模拟入库失败（放在文件写入和子进程入库之前）
+    if "force_ingest_fail" in fn.lower():
+        return {"ok": False, "lesson": lesson_name, "message": f"验收用：模拟入库失败"}
+
     # 保存到 knowledge-base/
     import re as _re
     safe_name = _re.sub(r'[《》\s/:*?"<>|]', '', lesson_name)[:100]
     dest = Path(__file__).resolve().parent.parent / "knowledge-base" / f"{safe_name}.md"
     from security import atomic_write
     atomic_write(dest, formatted.encode("utf-8"))
-
-    # 测试钩子：文件名含 force_ingest_fail 时模拟入库失败
-    if "force_ingest_fail" in fn.lower():
-        return {"ok": False, "lesson": lesson_name, "message": f"验收用：模拟入库失败"}
 
     # 触发入库
     import subprocess, sys

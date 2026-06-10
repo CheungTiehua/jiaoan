@@ -100,21 +100,32 @@ else:
     data = r.json() if r.status_code == 200 else {}
     check("7. 入库失败时 ok=False", data.get("ok") is not True, str(data.get("message", ""))[:80])
 
-# ---- 8. 测试模式错误透出 ----
-os.environ["ACCEPT_FORCE_RAG_ERROR"] = "1"
+# ---- 8. 测试模式错误透出（请求头触发） ----
 r = requests.post(f"{BASE}/api/generate",
-                  json={"grade": "三年级", "lesson": "测试课", "requirements": ""},
-                  headers=admin_h)
-del os.environ["ACCEPT_FORCE_RAG_ERROR"]
+                  json={"grade": "三年级", "lesson": "测试课", "requirements": "",
+                        "class_hours": "1", "semester": "上"},
+                  headers={**admin_h, "X-Accept-Force-Rag-Error": "1"})
 err_detail = r.json().get("detail", "")
-check("8. RuntimeError 透出真实错误", "验收用错误" in err_detail, err_detail[:80])
+check("8. RuntimeError 透出真实错误",
+      r.status_code == 400 and "验收用错误" in err_detail,
+      f"status={r.status_code}, detail={err_detail[:80]}")
 
 # ---- 9. 入库失败返回 ok:False ----
+content = ("这是验收测试教案内容。" * 20).encode("utf-8")
 r = requests.post(f"{BASE}/api/admin/upload-lesson",
                   headers=admin_h,
-                  files={"file": ("force_ingest_fail_test.docx", io.BytesIO(b"x" * 200))})
-data = r.json() if r.status_code == 200 else {}
-check("9. 入库失败时 ok=False", data.get("ok") is not True, str(data.get("message", ""))[:80])
+                  files={"file": ("force_ingest_fail_test.txt", io.BytesIO(content), "text/plain")})
+
+try:
+    data = r.json()
+except Exception:
+    data = {}
+
+check("9. 入库失败时 ok=False",
+      r.status_code == 200
+      and data.get("ok") is False
+      and "模拟入库失败" in str(data.get("message", "")),
+      f"status={r.status_code}, body={str(data)[:120]}")
 
 # ---- 结果 ----
 print(f"\n{'='*40}")
