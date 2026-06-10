@@ -386,10 +386,6 @@ async def admin_approve(record_id: str, username: str = Depends(require_admin_or
         raise HTTPException(status_code=404, detail="审核记录不存在")
     return {"message": "已批准"}
 
-class ReviewRejectRequest(BaseModel):
-    comment: str = ""
-
-
 @app.post("/api/admin/reviews/{record_id}/reject")
 async def admin_reject(record_id: str, req: dict = {}, username: str = Depends(require_admin_or_reviewer)):
     comment = str(req.get("comment", "")) if isinstance(req, dict) else ""
@@ -769,8 +765,9 @@ async def admin_upload_lesson(
             [sys.executable, str(Path(__file__).resolve().parent.parent / "scripts" / "ingest_knowledge.py")],
             capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
-            err = (result.stderr or result.stdout or "")[:300]
-            return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》入库失败：{err}"}
+            import logging
+            logging.getLogger("lekai").error("入库失败: %s", (result.stderr or result.stdout or "")[:500])
+            return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》入库失败，请查看服务端日志"}
         return {"ok": True, "lesson": lesson_name, "message": f"《{lesson_name}》已入库"}
     except Exception:
         return {"ok": False, "lesson": lesson_name, "message": f"《{lesson_name}》已保存，请手动运行入库脚本"}

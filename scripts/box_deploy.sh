@@ -111,6 +111,10 @@ EOF
 
 # Nginx config
 cat > /etc/nginx/sites-available/lekai << 'NGINXEOF'
+
+limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
+limit_req_status 429;
+
 server {
     listen 80;
     server_name _;
@@ -120,10 +124,6 @@ server {
     add_header X-Content-Type-Options nosniff;
     add_header X-Frame-Options SAMEORIGIN;
     add_header X-XSS-Protection "1; mode=block";
-
-    # API 限流: 30次/秒
-    limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
-    limit_req_status 429;
 
     # 前端
     location / {
