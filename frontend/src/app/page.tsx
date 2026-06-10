@@ -3,10 +3,11 @@
 import { useState, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import MermaidMindmap from "../components/MermaidMindmap";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
-type Tab = "exam" | "peer" | "plan" | "guide";
+type Tab = "exam" | "peer" | "plan" | "guide" | "lessonMindmap" | "methodMindmap";
 
 interface TextbookGrade { grade: string; semesters: { name: string; units: { name: string; lessons: { title: string; type?: string }[] }[] }[] }
 interface HistoryItem { id: string; timestamp: string; grade: string; lesson: string; exam_analysis: string; peer_analysis: string }
@@ -68,6 +69,12 @@ export default function Home() {
   const [peerAnalysis, setPeerAnalysis] = useState("");
   const [lessonPlan, setLessonPlan] = useState("");
   const [teachingGuide, setTeachingGuide] = useState("");
+
+  // Mindmap
+  const [lessonMindmap, setLessonMindmap] = useState("");
+  const [methodMindmap, setMethodMindmap] = useState("");
+  const [mindmapLoading, setMindmapLoading] = useState(false);
+  const [mindmapError, setMindmapError] = useState("");
 
   // Revision
   const [revising, setRevising] = useState(false);
@@ -222,6 +229,42 @@ export default function Home() {
     finally { setLoadingUnit(false); }
   };
 
+  // Mindmap
+  const handleGenerateMindmap = async () => {
+    if (!lessonPlan) { setMindmapError("请先生成教案，再生成思维导图"); return; }
+    setMindmapError(""); setMindmapLoading(true);
+    setLessonMindmap(""); setMethodMindmap("");
+    try {
+      const res = await fetch(`${API}/mindmap/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          grade, lesson,
+          lesson_plan: lessonPlan,
+          teaching_guide: teachingGuide,
+          analysis: examAnalysis,
+          peer_reference: peerAnalysis,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("登录已过期，请重新登录");
+        if (res.status === 429) throw new Error("请求过于频繁，请稍后再试");
+        throw new Error(d.detail || "思维导图生成失败");
+      }
+      setLessonMindmap(d.lesson_mindmap_mermaid || "");
+      setMethodMindmap(d.method_mindmap_mermaid || "");
+    } catch (e: any) { setMindmapError(e.message); }
+    finally { setMindmapLoading(false); }
+  };
+
+  const copyMermaidSource = (code: string) => {
+    navigator.clipboard.writeText(code).then(
+      () => alert("已复制"),
+      () => alert("复制失败，请手动选择源码")
+    );
+  };
+
   // Reflection
   const handleReflect = async () => {
     setLoadingReflect(true); setReflection("");
@@ -239,12 +282,19 @@ export default function Home() {
   const selectLesson = useCallback((g: string, s: string, l: string) => { setGrade(g); setSemester(s); setLesson(l); }, []);
 
   const tabContent = () => {
-    switch (activeTab) { case "exam": return examAnalysis; case "peer": return peerAnalysis; case "plan": return lessonPlan; case "guide": return teachingGuide; default: return ""; }
+    switch (activeTab) {
+      case "exam": return examAnalysis;
+      case "peer": return peerAnalysis;
+      case "plan": return lessonPlan;
+      case "guide": return teachingGuide;
+      default: return "";
+    }
   };
 
   const TABS: { key: Tab; label: string; icon: string }[] = [
     { key: "exam", label: "考点", icon: "🎯" }, { key: "peer", label: "同行", icon: "👥" },
     { key: "plan", label: "教案", icon: "📝" }, { key: "guide", label: "辅导", icon: "🎓" },
+    { key: "lessonMindmap", label: "教案导图", icon: "🗺️" }, { key: "methodMindmap", label: "备课方法", icon: "🧠" },
   ];
 
   // ---- SETUP WIZARD ----
@@ -483,7 +533,7 @@ export default function Home() {
               <div className="bg-white rounded-xl shadow-sm border border-amber-100 overflow-hidden mb-4">
                 <div className="flex border-b border-gray-200 overflow-x-auto">
                   {TABS.map(t => {
-                    const has = (t.key === "exam" && examAnalysis) || (t.key === "peer" && peerAnalysis) || (t.key === "plan" && lessonPlan) || (t.key === "guide" && teachingGuide);
+                    const has = (t.key === "exam" && examAnalysis) || (t.key === "peer" && peerAnalysis) || (t.key === "plan" && lessonPlan) || (t.key === "guide" && teachingGuide) || (t.key === "lessonMindmap" && lessonPlan) || (t.key === "methodMindmap" && lessonPlan);
                     return (
                       <button key={t.key} onClick={() => setActiveTab(t.key)} disabled={!has}
                         className={`flex-1 py-2 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === t.key ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50" : has ? "text-gray-500 hover:text-gray-700" : "text-gray-300 cursor-not-allowed"}`}>
@@ -493,9 +543,36 @@ export default function Home() {
                   })}
                 </div>
                 <div className="p-4 max-h-[55vh] overflow-y-auto">
-                  <div className="prose prose-amber prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{tabContent()}</ReactMarkdown>
+                  {(activeTab === "lessonMindmap" || activeTab === "methodMindmap") ? (
+                    <MindmapTabContent
+                      code={activeTab === "lessonMindmap" ? lessonMindmap : methodMindmap}
+                      loading={mindmapLoading}
+                      error={mindmapError}
+                      hasPlan={!!lessonPlan}
+                      onGenerate={handleGenerateMindmap}
+                      onCopy={() => copyMermaidSource(activeTab === "lessonMindmap" ? lessonMindmap : methodMindmap)}
+                    />
+                  ) : (
+                    <div className="prose prose-amber prose-sm max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{tabContent()}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Mindmap standalone section (for regenerate)} */}
+            {(lessonMindmap || methodMindmap || mindmapError) && lessonPlan && (
+              <div className="bg-white rounded-xl shadow-sm border border-indigo-100 p-4 mb-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-sm font-semibold text-indigo-800">🧠 思维导图</h3>
+                    <p className="text-xs text-gray-500">重新生成会覆盖当前导图</p>
                   </div>
+                  <button onClick={handleGenerateMindmap} disabled={mindmapLoading}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-xs px-3 py-1 rounded transition-colors">
+                    {mindmapLoading ? "生成中..." : "重新生成"}
+                  </button>
                 </div>
               </div>
             )}
@@ -716,6 +793,52 @@ export default function Home() {
             )}
           </div>
         </main>
+      </div>
+    </div>
+  );
+}
+
+function MindmapTabContent({
+  code, loading, error, hasPlan, onGenerate, onCopy,
+}: {
+  code: string; loading: boolean; error: string; hasPlan: boolean;
+  onGenerate: () => void; onCopy: () => void;
+}) {
+  if (!hasPlan) {
+    return <div className="text-center py-8 text-gray-400 text-sm">请先生成教案，再生成思维导图</div>;
+  }
+
+  if (loading) {
+    return <div className="text-center py-8 text-gray-400 text-sm">正在生成思维导图，请稍候...</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-sm text-red-600 mb-3">思维导图生成失败：{error}</div>
+        <button onClick={onGenerate} className="bg-indigo-600 text-white text-xs px-4 py-1.5 rounded hover:bg-indigo-700">重试</button>
+      </div>
+    );
+  }
+
+  if (!code) {
+    return (
+      <div className="text-center py-8">
+        <div className="text-gray-400 text-sm mb-3">尚未生成思维导图</div>
+        <button onClick={onGenerate} className="bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-4 py-2 rounded-lg transition-colors">生成思维导图</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <MermaidMindmap code={code} />
+      <div className="mt-4 border-t border-gray-100 pt-3">
+        <button onClick={onCopy} className="text-xs text-indigo-600 hover:text-indigo-800 mr-4">📋 复制 Mermaid 源码</button>
+        <details className="inline text-xs">
+          <summary className="text-gray-500 cursor-pointer hover:text-gray-700 inline">查看 Mermaid 源码</summary>
+          <pre className="mt-2 text-xs bg-gray-50 p-2 rounded border overflow-x-auto max-h-32 whitespace-pre">{code}</pre>
+        </details>
       </div>
     </div>
   );
