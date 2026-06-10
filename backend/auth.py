@@ -24,9 +24,8 @@ AUDIT_FILE = DATA_DIR / "audit.jsonl"
 
 def audit_log(username: str, role: str, action: str, target: str = "", success: bool = True, detail: str = ""):
     """写入审计日志"""
-    import json as _ajson
-    _ajson.ensure_ascii = False  # type: ignore
-    entry = _ajson.dumps({
+    import json
+    entry = json.dumps({
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "username": username,
         "role": role,
@@ -38,8 +37,9 @@ def audit_log(username: str, role: str, action: str, target: str = "", success: 
     try:
         with open(AUDIT_FILE, "a", encoding="utf-8") as f:
             f.write(entry + "\n")
-    except Exception:
-        pass
+    except Exception as e:
+        import logging
+        logging.getLogger("lekai").warning("审计日志写入失败: %s", e)
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 

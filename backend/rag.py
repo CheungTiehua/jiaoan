@@ -39,8 +39,9 @@ if not _keys:
             import json as _j
             _stored = _j.loads(_key_file.read_text()).get("api_key", "")
             _keys = [k.strip() for k in _stored.split(",") if k.strip()]
-        except Exception:
-            pass
+        except Exception as e:
+            import logging
+            logging.getLogger("lekai").warning("api_key.json 无法读取，将使用环境变量: %s", e)
 
 
 def _get_api_key() -> str:

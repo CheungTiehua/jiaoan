@@ -57,7 +57,8 @@ def main():
     try:
         sys.path.insert(0, str(PROJECT_ROOT / "backend"))
         from config import VERSION
-    except Exception:
+    except Exception as e:
+        print(f"[WARN] 无法读取版本号: {e}", file=sys.stderr)
         VERSION = "unknown"
     print(f"当前版本: {VERSION}")
 

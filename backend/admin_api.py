@@ -64,8 +64,8 @@ def get_review_queue() -> list[dict]:
             data.pop("lesson_plan", None)
             data.pop("teaching_guide", None)
             queue.append(data)
-        except Exception:
-            _log.warning("解析审核记录失败: %s", f.name)
+        except Exception as e:
+            _log.warning("解析审核记录失败: %s: %s", f.name, e)
     return queue
 
 
@@ -76,8 +76,8 @@ def get_review_detail(record_id: str) -> Optional[dict]:
         return None
     try:
         return json.loads(filepath.read_text())
-    except Exception:
-        _log.warning("读取审核详情失败: %s", filepath.name)
+    except Exception as e:
+        _log.warning("读取审核详情失败: %s: %s", filepath.name, e)
         return None
 
 
@@ -94,8 +94,8 @@ def approve_review(record_id: str, reviewer: str, comment: str = "") -> bool:
         data["comment"] = comment
         atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
         return True
-    except Exception:
-        _log.warning("审核操作失败: %s", filepath.name)
+    except Exception as e:
+        _log.warning("审核操作失败: %s: %s", filepath.name, e)
         return False
 
 
@@ -112,8 +112,8 @@ def reject_review(record_id: str, reviewer: str, comment: str) -> bool:
         data["comment"] = comment
         atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
         return True
-    except Exception:
-        _log.warning("审核操作失败: %s", filepath.name)
+    except Exception as e:
+        _log.warning("审核操作失败: %s: %s", filepath.name, e)
         return False
 
 

@@ -282,9 +282,6 @@ def _save_and_exit():
     report_file = PROJECT_ROOT / f"delivery_report_{ts}.txt"
     content = "\n".join(results)
 
-    with open(report_file, "w", encoding="utf-8") as f:
-        f.write(content)
-
     print(content)
 
     summary = "\n" + "="*60

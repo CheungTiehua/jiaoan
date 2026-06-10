@@ -224,9 +224,14 @@ def main():
                     lesson_type=seed["type"],
                     tags=", ".join(seed["tags"])
                 )
+            except Exception as e:
+                print(f"❌ 生成失败: {e}")
+                continue
+            try:
                 save_seed(content, grade, seed["title"])
             except Exception as e:
-                print(f"❌ 失败: {e}")
+                print(f"❌ 保存失败: {e}")
+                print(f"   已生成内容（请手动保存）:\n{content[:500]}")
 
     print(f"\n[完成] 知识库目录: {KNOWLEDGE_BASE}")
 
