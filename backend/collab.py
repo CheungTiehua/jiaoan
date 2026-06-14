@@ -144,6 +144,7 @@ def complete_task(group_name: str, task_index: int) -> dict:
         if task_index < 0 or task_index >= len(tasks):
             return {"ok": False, "msg": "任务不存在"}
         tasks[task_index]["status"] = "done"
+        tasks[task_index]["done"] = True
         return {"ok": True, "msg": "任务已完成"}
     return _atomic_update(_mut)
 

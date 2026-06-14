@@ -122,11 +122,14 @@ def search_hybrid(
 
     返回: [{"text": str, "meta": dict, "score": float}, ...]
     """
+    collection = get_collection()
+    if collection.count() == 0:
+        return []
+
     _ensure_bm25()
 
     # 1. 向量检索 (top_k * 2, 给融合留余量)
     model = get_embedding_model()
-    collection = get_collection()
     query_vec = model.encode([query], normalize_embeddings=True, show_progress_bar=False)[0].tolist()
     where = {"grade": grade} if grade else None
 
@@ -143,6 +146,9 @@ def search_hybrid(
         scores = bm25.get_scores(tokenized_query)
         for i, score in enumerate(scores):
             if i in _bm25_corpus["id_map"]:
+                meta = _bm25_corpus["metadatas"][i] if i < len(_bm25_corpus.get("metadatas", [])) else {}
+                if grade and meta.get("grade") != grade:
+                    continue
                 cid = _bm25_corpus["id_map"][i]
                 bm25_scores[cid] = float(score)
 
@@ -190,7 +196,7 @@ def search_hybrid(
                     meta = _bm25_corpus["metadatas"][i] if i < len(_bm25_corpus.get("metadatas", [])) else {}
                     break
 
-        results.append({"text": text, "meta": meta, "score": score})
+        results.append({"id": cid, "text": text, "meta": meta, "score": score})
 
     return results
 

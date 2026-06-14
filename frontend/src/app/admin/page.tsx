@@ -1,9 +1,152 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
+
+type UserSummary = {
+  username: string;
+  role?: string;
+  total?: number;
+  recent_lessons?: string[];
+};
+
+type ReviewItem = {
+  id: string;
+  username: string;
+  lesson: string;
+  grade: string;
+  status: "pending" | "approved" | "rejected" | string;
+  timestamp?: string;
+};
+
+type ChunkItem = {
+  id: string;
+  lesson?: string;
+  grade?: string;
+  chunk_type?: string;
+  doc_type?: string;
+  source_role?: string;
+  text?: string;
+};
+
+type CoverageLesson = {
+  lesson: string;
+  normative_count: number;
+  method_count: number;
+  doc_type_counts?: Record<string, number>;
+  has_textbook?: boolean;
+  has_standard_or_exam?: boolean;
+  has_method_case?: boolean;
+  missing?: string[];
+  status?: string;
+};
+
+type CoverageReport = {
+  grade?: string;
+  semester?: string;
+  lesson?: string;
+  lessons?: CoverageLesson[];
+  total_lessons?: number;
+  evidence?: unknown[];
+} & Partial<CoverageLesson>;
+
+type EvidenceGapLesson = {
+  grade?: string;
+  lesson?: string;
+  total_records?: number;
+  records_with_gaps?: number;
+  citation_error_records?: number;
+  missing_counts?: Record<string, number>;
+  insufficient_block_counts?: Record<string, number>;
+  last_seen?: string;
+};
+
+type EvidenceGapRecord = {
+  id: string;
+  username?: string;
+  grade?: string;
+  lesson?: string;
+  timestamp?: string;
+  missing_evidence?: string[];
+  insufficient_blocks?: string[];
+  citation_errors?: string[];
+};
+
+type EvidenceGapReport = {
+  total_records?: number;
+  records_with_gaps?: number;
+  citation_error_records?: number;
+  gap_rate?: number;
+  missing_counts?: Record<string, number>;
+  insufficient_block_counts?: Record<string, number>;
+  lessons?: EvidenceGapLesson[];
+  recent_records?: EvidenceGapRecord[];
+};
+
+type FeedbackStats = {
+  total_feedbacks?: number;
+  avg_rating?: number;
+  ratings?: Record<string, number>;
+  top_tags?: [string, number][];
+};
+
+type HealthCheck = {
+  ok?: boolean;
+  error?: string;
+  free_gb?: number;
+  total_gb?: number;
+  total_chunks?: number;
+};
+
+type HealthReport = {
+  status?: string;
+  timestamp?: string;
+  checks?: Record<string, HealthCheck>;
+};
+
+type DeepHealth = {
+  status?: string;
+  api_key_ok?: boolean;
+  model_ok?: boolean;
+  chunks?: number;
+};
+
+type Dashboard = {
+  total_users?: number;
+  total_plans?: number;
+  review_stats?: { approved?: number; pending?: number };
+  grade_coverage?: Record<string, number>;
+  teacher_summary?: UserSummary[];
+};
+
+type DeviceInfo = {
+  mac?: string;
+  disk_total_gb?: number;
+  disk_free_gb?: number;
+  disk_used_pct?: number;
+  license?: string;
+  version?: string;
+};
+
+const DOC_TYPE_OPTIONS = [
+  { value: "textbook", label: "教材", role: "normative" },
+  { value: "curriculum_standard", label: "课标", role: "normative" },
+  { value: "exam_outline", label: "考纲/考试说明", role: "normative" },
+  { value: "unit_goal", label: "单元目标", role: "normative" },
+  { value: "exam_material", label: "题库/考点资料", role: "normative" },
+  { value: "teaching_guidance", label: "教学设计指导", role: "method_case" },
+  { value: "teacher_case", label: "老教师教案", role: "method_case" },
+  { value: "local_case", label: "本校案例/普通教案", role: "method_case" },
+  { value: "training_case", label: "进修校案例", role: "method_case" },
+];
+
+const ROLE_LABEL: Record<string, string> = {
+  normative: "规范依据",
+  method_case: "方法参考",
+};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -13,75 +156,97 @@ export default function AdminPage() {
   const [section, setSection] = useState<Section>("dashboard");
 
   // Dashboard
-  const [dashboard, setDashboard] = useState<any>(null);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   // Reviews
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
   // Prompts
   const [chatPrompt, setChatPrompt] = useState("");
   const [auditPrompt, setAuditPrompt] = useState("");
   // Roles
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<UserSummary[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [selectedRole, setSelectedRole] = useState("teacher");
   // Chunks
-  const [chunks, setChunks] = useState<any[]>([]);
+  const [chunks, setChunks] = useState<ChunkItem[]>([]);
+  // Knowledge upload and coverage
+  const [uploadDocType, setUploadDocType] = useState("local_case");
+  const [uploadSourceRole, setUploadSourceRole] = useState("method_case");
+  const [coverage, setCoverage] = useState<CoverageReport | null>(null);
+  const [evidenceGaps, setEvidenceGaps] = useState<EvidenceGapReport | null>(null);
+  const [coverageGrade, setCoverageGrade] = useState("三年级");
+  const [coverageSemester, setCoverageSemester] = useState("上");
+  const [coverageLesson, setCoverageLesson] = useState("");
   // Feedback
-  const [feedbackStats, setFeedbackStats] = useState<any>(null);
+  const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null);
   // Health
-  const [health, setHealth] = useState<any>(null);
+  const [health, setHealth] = useState<HealthReport | null>(null);
+  const [deepHealth, setDeepHealth] = useState<DeepHealth | null>(null);
 
   useEffect(() => {
     const t = localStorage.getItem("lekai_token") || "";
     setToken(t);
     // 验证角色：非 admin/reviewer 重定向
     if (t) {
-      fetch("/api/me", { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()).then(d => {
+      fetch(`${API}/me`, { headers: { Authorization: `Bearer ${t}` } }).then(r => r.json()).then(d => {
+        setUsername(d.username || "");
+        setRole(d.role || "");
         if (d.role && !["admin", "reviewer"].includes(d.role)) {
           router.push("/");
         }
       }).catch(() => {});
     }
-  }, []);
+  }, [router]);
 
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const headers = useMemo(() => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" }), [token]);
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     const [dr, rr] = await Promise.all([
       fetch(`${API}/admin/dashboard`, { headers }).then(r => r.json()),
       fetch(`${API}/admin/reviews`, { headers }).then(r => r.json()),
     ]);
     setDashboard(dr); setReviews(rr.reviews || []);
     return dr;  // 返回值供调用方直接使用
-  };
+  }, [headers]);
 
-  const loadHealth = async () => {
-    const h = await fetch(`${API}/admin/health`, { headers }).then(r => r.json());
-    setHealth(h);
-  };
+  const loadHealth = useCallback(async () => {
+    const [basic, deep] = await Promise.all([
+      fetch(`${API}/admin/health`, { headers }).then(r => r.json()),
+      fetch(`${API}/health/deep`, { headers }).then(r => r.json()).catch(() => null),
+    ]);
+    setHealth(basic);
+    setDeepHealth(deep);
+  }, [headers]);
 
-  const loadPrompts = async () => {
+  const loadPrompts = useCallback(async () => {
     const p = await fetch(`${API}/admin/prompts`, { headers }).then(r => r.json());
     setChatPrompt(p.chat_prompt || ""); setAuditPrompt(p.audit_prompt || "");
-  };
+  }, [headers]);
 
-  const loadUsers = async () => {
-    // Get users from dashboard data
-    if (dashboard?.teacher_summary) {
-      setUsers(dashboard.teacher_summary);
-    }
-  };
+  const loadCoverage = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (coverageGrade) params.set("grade", coverageGrade);
+    if (coverageSemester) params.set("semester", coverageSemester);
+    if (coverageLesson.trim()) params.set("lesson", coverageLesson.trim());
+    const [data, gaps] = await Promise.all([
+      fetch(`${API}/admin/evidence-coverage?${params.toString()}`, { headers }).then(r => r.json()),
+      fetch(`${API}/admin/evidence-gaps?${params.toString()}`, { headers }).then(r => r.json()),
+    ]);
+    setCoverage(data);
+    setEvidenceGaps(gaps);
+  }, [headers, coverageGrade, coverageSemester, coverageLesson]);
 
   useEffect(() => {
     if (!token) return;
     if (section === "dashboard" || section === "reviews") loadDashboard();
     if (section === "chunks") fetch(`${API}/admin/chunks`, { headers }).then(r => r.json()).then(d => setChunks(d.chunks || []));
+    if (section === "coverage") loadCoverage();
     if (section === "feedback") fetch(`${API}/admin/feedback-stats`, { headers }).then(r => r.json()).then(setFeedbackStats);
     if (section === "health") loadHealth();
     if (section === "prompts") loadPrompts();
     if (section === "roles") loadDashboard().then((dr) => {
       if (dr?.teacher_summary) setUsers(dr.teacher_summary);
     });
-  }, [section, token]);
+  }, [section, token, headers, loadDashboard, loadHealth, loadPrompts, loadCoverage]);
 
   const savePrompts = async () => {
     try {
@@ -118,12 +283,36 @@ export default function AdminPage() {
     } catch { console.error("admin API failed"); alert("网络错误，请重试"); }
   };
 
-type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedback" | "chunks" | "device" | "health" | "backup";
+  const doRestore = async (file: File) => {
+    if (!window.confirm("恢复会覆盖用户数据、知识库和向量库。确认继续？")) return;
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch(`${API}/admin/restore`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.detail || "恢复失败");
+        return;
+      }
+      alert(data.message || "恢复成功，建议重启服务");
+      loadDashboard();
+    } catch {
+      console.error("admin API failed");
+      alert("网络错误，请重试");
+    }
+  };
+
+type Section = "dashboard" | "reviews" | "upload" | "coverage" | "prompts" | "roles" | "feedback" | "chunks" | "device" | "health" | "backup";
 
   const SECTIONS: { key: Section; label: string; icon: string }[] = [
     { key: "dashboard", label: "仪表盘", icon: "📊" },
     { key: "reviews", label: "审核队列", icon: "✅" },
-    { key: "upload", label: "教案入库", icon: "📤" },
+    { key: "upload", label: "材料入库", icon: "📤" },
+    { key: "coverage", label: "依据覆盖", icon: "🧭" },
     { key: "prompts", label: "提示词调优", icon: "🔧" },
     { key: "roles", label: "角色管理", icon: "👥" },
     { key: "chunks", label: "知识库Chunk", icon: "📦" },
@@ -138,7 +327,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
       <div className="min-h-screen flex items-center justify-center bg-amber-50">
         <div className="text-center">
           <p className="text-gray-500">请先登录</p>
-          <a href="/" className="text-amber-600 text-sm underline mt-2 block">返回登录</a>
+          <Link href="/" className="text-amber-600 text-sm underline mt-2 block">返回登录</Link>
         </div>
       </div>
     );
@@ -156,7 +345,10 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <a href="/" className="text-sm text-amber-600 hover:text-amber-800">← 返回主页</a>
+            <Link href="/" className="text-sm text-amber-600 hover:text-amber-800">← 返回主页</Link>
+            {(username || role) && (
+              <span className="text-xs text-gray-400">{username}{role ? ` · ${role}` : ""}</span>
+            )}
           </div>
         </div>
       </header>
@@ -211,7 +403,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                     <tr><th className="text-left px-4 py-2">教师</th><th className="text-right px-4 py-2">生成数</th><th className="text-left px-4 py-2">最近课题</th></tr>
                   </thead>
                   <tbody>
-                    {(dashboard.teacher_summary || []).map((t: any) => (
+                    {(dashboard.teacher_summary || []).map((t) => (
                       <tr key={t.username} className="border-t">
                         <td className="px-4 py-2 font-medium">{t.username}</td>
                         <td className="px-4 py-2 text-right">{t.total || 0}</td>
@@ -227,22 +419,112 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
           {/* Upload Lesson */}
           {section === "upload" && (
             <div>
-              <h2 className="text-lg font-bold text-gray-800 mb-4">📤 教案入库</h2>
-              <p className="text-sm text-gray-500 mb-4">上传 .md / .txt / .docx 教案文档，自动格式化并入库。仅管理员和教研组长可操作。</p>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">📤 材料入库</h2>
+              <p className="text-sm text-gray-500 mb-4">上传 .md / .txt / .docx / .pdf 文档，必须先标注材料类型和角色。扫描 PDF 会自动 OCR 并保留页码与高亮定位。</p>
               <div className="bg-white rounded-lg border p-6">
-                <input type="file" accept=".md,.txt,.docx" onChange={async (e) => {
+                <div className="grid md:grid-cols-2 gap-4 mb-4">
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-600 block mb-1">文档类型</span>
+                    <select value={uploadDocType} onChange={e => {
+                      const next = e.target.value;
+                      setUploadDocType(next);
+                      setUploadSourceRole(DOC_TYPE_OPTIONS.find(opt => opt.value === next)?.role || "method_case");
+                    }} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <optgroup label="规范依据">
+                        {DOC_TYPE_OPTIONS.filter(opt => opt.role === "normative").map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="方法参考">
+                        {DOC_TYPE_OPTIONS.filter(opt => opt.role === "method_case").map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-gray-600 block mb-1">材料角色</span>
+                    <select value={uploadSourceRole} onChange={e => setUploadSourceRole(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="normative">规范依据</option>
+                      <option value="method_case">方法参考</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="mb-4 rounded border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  当前标注：{DOC_TYPE_OPTIONS.find(opt => opt.value === uploadDocType)?.label || uploadDocType} / {ROLE_LABEL[uploadSourceRole] || uploadSourceRole}
+                </div>
+                <input type="file" accept=".md,.txt,.docx,.pdf,application/pdf" onChange={async (e) => {
                   const f = e.target.files?.[0];
                   if (!f) return;
+                  const expectedRole = DOC_TYPE_OPTIONS.find(opt => opt.value === uploadDocType)?.role;
+                  if (!expectedRole || expectedRole !== uploadSourceRole) {
+                    alert("文档类型和材料角色不匹配，请重新选择");
+                    e.target.value = "";
+                    return;
+                  }
                   const form = new FormData();
                   form.append("file", f);
+                  form.append("doc_type", uploadDocType);
+                  form.append("source_role", uploadSourceRole);
                   try {
                     const res = await fetch(`${API}/admin/upload-lesson`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form });
                     const d = await res.json();
-                    alert(d.ok ? d.message : "上传失败");
+                    alert(d.ok ? d.message : (d.detail || d.message || "上传失败"));
+                    if (d.ok) loadCoverage();
                   } catch { alert("上传失败"); }
                   e.target.value = "";
                 }} className="text-sm" />
               </div>
+            </div>
+          )}
+
+          {/* Evidence Coverage */}
+          {section === "coverage" && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-800 mb-4">🧭 依据覆盖度</h2>
+              <div className="bg-white rounded-lg border p-4 mb-4">
+                <div className="flex flex-wrap gap-2 items-end">
+                  <label className="block">
+                    <span className="text-xs text-gray-500 block mb-1">年级</span>
+                    <select value={coverageGrade} onChange={e => setCoverageGrade(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      {["一年级","二年级","三年级","四年级","五年级","六年级"].map(g => <option key={g} value={g}>{g}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs text-gray-500 block mb-1">册次</span>
+                    <select value={coverageSemester} onChange={e => setCoverageSemester(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                      <option value="上">上册</option>
+                      <option value="下">下册</option>
+                    </select>
+                  </label>
+                  <label className="block flex-1 min-w-48">
+                    <span className="text-xs text-gray-500 block mb-1">课题（留空查看汇总）</span>
+                    <input value={coverageLesson} onChange={e => setCoverageLesson(e.target.value)}
+                      placeholder="如：秋天的雨"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  </label>
+                  <button onClick={loadCoverage}
+                    className="bg-amber-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-amber-700">
+                    检查
+                  </button>
+                </div>
+              </div>
+              {evidenceGaps && <EvidenceGapPanel report={evidenceGaps} />}
+              {coverage && coverage.lesson && (
+                <CoverageCard item={coverage as CoverageLesson} title={`《${coverage.lesson}》`} />
+              )}
+              {coverage && !coverage.lesson && (
+                <div>
+                  <div className="text-sm text-gray-500 mb-3">共 {coverage.total_lessons || 0} 个课题</div>
+                  {(coverage.lessons || []).map(item => (
+                    <CoverageCard key={item.lesson} item={item} title={`《${item.lesson}》`} />
+                  ))}
+                  {(coverage.lessons || []).length === 0 && <div className="text-sm text-gray-400">暂无知识库材料</div>}
+                </div>
+              )}
             </div>
           )}
 
@@ -251,7 +533,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
             <div>
               <h2 className="text-lg font-bold text-gray-800 mb-4">✅ 审核队列</h2>
               {reviews.length === 0 && <p className="text-gray-400 text-sm">暂无待审核教案</p>}
-              {reviews.map((r: any) => (
+              {reviews.map((r) => (
                 <div key={r.id} className={`bg-white rounded-lg border p-4 mb-2 ${r.status === "pending" ? "border-l-4 border-l-yellow-400" : r.status === "approved" ? "border-l-4 border-l-green-400" : "border-l-4 border-l-red-400"}`}>
                   <div className="flex items-center justify-between">
                     <div>
@@ -356,7 +638,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                       if (d.ok) {
                         let msg = `导入完成：成功 ${d.imported} 人`;
                         if (d.failed > 0) {
-                          msg += `，失败 ${d.failed} 人：` + d.results.failed.map((f: any) => f.username || f.line).join(", ");
+                          msg += `，失败 ${d.failed} 人：` + d.results.failed.map((f: { username?: string; line?: number }) => f.username || f.line).join(", ");
                         }
                         alert(msg);
                         loadDashboard();
@@ -375,7 +657,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                     <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)}
                       className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
                       <option value="">选择用户</option>
-                      {(users || []).map((u: any) => (
+                      {(users || []).map((u) => (
                         <option key={u.username} value={u.username}>{u.username} ({u.total || 0}篇)</option>
                       ))}
                     </select>
@@ -400,7 +682,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                     <tr><th className="text-left px-4 py-2">用户名</th><th className="text-left px-4 py-2">当前角色</th></tr>
                   </thead>
                   <tbody>
-                    {(users || []).map((u: any) => (
+                    {(users || []).map((u) => (
                       <tr key={u.username} className="border-t">
                         <td className="px-4 py-2 font-medium">{u.username}</td>
                         <td className="px-4 py-2">{u.role || "teacher"}</td>
@@ -423,7 +705,21 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
               <h2 className="text-lg font-bold text-gray-800 mb-4">🩺 系统健康</h2>
               {health && (
                 <div className="space-y-3">
-                  {Object.entries(health.checks || {}).map(([k, v]: [string, any]) => (
+                  {deepHealth && (
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { label: "DeepSeek API", ok: deepHealth.api_key_ok, detail: deepHealth.api_key_ok ? "可调用" : "不可用" },
+                        { label: "Embedding 模型", ok: deepHealth.model_ok, detail: deepHealth.model_ok ? "已加载" : "加载失败" },
+                        { label: "知识库索引", ok: (deepHealth.chunks || 0) > 0, detail: `${deepHealth.chunks || 0} chunks` },
+                      ].map(item => (
+                        <div key={item.label} className={`bg-white rounded-lg border p-4 ${item.ok ? "border-l-4 border-l-green-400" : "border-l-4 border-l-red-400"}`}>
+                          <div className="text-sm font-medium">{item.label}</div>
+                          <div className={`text-sm mt-1 ${item.ok ? "text-green-600" : "text-red-600"}`}>{item.detail}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {Object.entries(health.checks || {}).map(([k, v]) => (
                     <div key={k} className={`bg-white rounded-lg border p-4 flex items-center justify-between ${
                       v.ok ? "border-l-4 border-l-green-400" : "border-l-4 border-l-red-400"
                     }`}>
@@ -448,12 +744,17 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
           {section === "chunks" && (
             <div>
               <h2 className="text-lg font-bold text-gray-800 mb-4">📦 知识库 Chunk ({chunks.length})</h2>
-              {chunks.map((c: any) => (
+              {chunks.map((c) => (
                 <div key={c.id} className="bg-white rounded-lg border p-3 mb-1 text-xs">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-medium">{c.lesson || "—"}</span>
-                    <span className="text-gray-400">{c.grade} · {c.chunk_type}</span>
+                    <span className="text-gray-400">{c.grade} · {c.chunk_type} · {ROLE_LABEL[c.source_role || ""] || c.source_role || "未标注"}</span>
                   </div>
+                  {c.doc_type && (
+                    <div className="mb-1 text-[11px] text-gray-400">
+                      {DOC_TYPE_OPTIONS.find(opt => opt.value === c.doc_type)?.label || c.doc_type}
+                    </div>
+                  )}
                   <p className="text-gray-500 truncate">{c.text}</p>
                 </div>
               ))}
@@ -478,7 +779,7 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
               <div className="bg-white rounded-lg border p-4 mb-4">
                 {[5,4,3,2,1].map(s => {
                   const count = feedbackStats.ratings?.[String(s)] || 0;
-                  const max = Math.max(1, ...Object.values(feedbackStats.ratings || {1:1}));
+                  const max = Math.max(1, ...(Object.values(feedbackStats.ratings || {1: 1}) as number[]));
                   return (
                     <div key={s} className="flex items-center gap-2 mb-1">
                       <span className="text-xs w-8">{s}星</span>
@@ -509,6 +810,19 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
                   className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm hover:bg-blue-700">
                   下载备份 (.zip)
                 </button>
+                <div className="mt-6 border-t pt-5">
+                  <p className="text-sm text-gray-500 mb-3">从备份 zip 恢复数据。恢复后请重启服务刷新内存索引。</p>
+                  <input
+                    type="file"
+                    accept=".zip,application/zip"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) doRestore(file);
+                      e.target.value = "";
+                    }}
+                    className="text-sm"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -518,10 +832,134 @@ type Section = "dashboard" | "reviews" | "upload" | "prompts" | "roles" | "feedb
   );
 }
 
+function CountTags({ counts, emptyText }: { counts?: Record<string, number>; emptyText: string }) {
+  const items = Object.entries(counts || {}).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (items.length === 0) return <span className="text-xs text-gray-400">{emptyText}</span>;
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {items.map(([label, count]) => (
+        <span key={label} className="text-[11px] bg-red-50 text-red-700 px-2 py-0.5 rounded-full">
+          {label}: {count}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function EvidenceGapPanel({ report }: { report: EvidenceGapReport }) {
+  const gapRate = Math.round((report.gap_rate || 0) * 100);
+  const lessons = (report.lessons || []).filter(item => (item.records_with_gaps || 0) > 0).slice(0, 6);
+  const recent = (report.recent_records || []).slice(0, 5);
+  return (
+    <div className="bg-white rounded-lg border p-4 mb-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">生成记录中的依据不足</h3>
+          <p className="text-xs text-gray-500 mt-1">统计真实历史记录，帮助判断哪些课需要优先补教材、课标、考纲或单元材料。</p>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded ${gapRate ? "bg-red-50 text-red-700" : "bg-green-50 text-green-700"}`}>
+          {gapRate}% 记录有缺口
+        </span>
+      </div>
+      <div className="grid md:grid-cols-3 gap-3 mb-4">
+        <div className="rounded border bg-gray-50 p-3">
+          <div className="text-2xl font-bold text-gray-800">{report.total_records || 0}</div>
+          <div className="text-xs text-gray-500">生成记录</div>
+        </div>
+        <div className="rounded border bg-red-50 p-3">
+          <div className="text-2xl font-bold text-red-700">{report.records_with_gaps || 0}</div>
+          <div className="text-xs text-red-700">依据不足记录</div>
+        </div>
+        <div className="rounded border bg-amber-50 p-3">
+          <div className="text-2xl font-bold text-amber-700">{report.citation_error_records || 0}</div>
+          <div className="text-xs text-amber-700">引用校验异常</div>
+        </div>
+      </div>
+      <div className="grid md:grid-cols-2 gap-3 mb-4">
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-2">缺失材料类型</div>
+          <CountTags counts={report.missing_counts} emptyText="暂无缺失记录" />
+        </div>
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-2">依据不足模块</div>
+          <CountTags counts={report.insufficient_block_counts} emptyText="暂无不足模块" />
+        </div>
+      </div>
+      {lessons.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs font-medium text-gray-600 mb-2">优先补资料课题</div>
+          <div className="space-y-2">
+            {lessons.map(item => (
+              <div key={`${item.grade}-${item.lesson}`} className="rounded border px-3 py-2 text-xs">
+                <div className="flex justify-between gap-3 mb-1">
+                  <span className="font-medium text-gray-700">{item.grade}《{item.lesson}》</span>
+                  <span className="text-red-600">{item.records_with_gaps || 0}/{item.total_records || 0} 条有缺口</span>
+                </div>
+                <CountTags counts={item.missing_counts} emptyText="暂无缺失记录" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {recent.length > 0 && (
+        <div>
+          <div className="text-xs font-medium text-gray-600 mb-2">最近依据不足记录</div>
+          <div className="space-y-1">
+            {recent.map(item => (
+              <div key={`${item.username}-${item.id}`} className="text-xs text-gray-500">
+                {item.timestamp} · {item.username} · {item.grade}《{item.lesson}》 · {(item.missing_evidence || []).join("；") || (item.insufficient_blocks || []).join("、")}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CoverageCard({ item, title }: { item: CoverageLesson; title: string }) {
+  const missing = item.missing || [];
+  const counts = item.doc_type_counts || {};
+  return (
+    <div className={`bg-white rounded-lg border p-4 mb-3 ${missing.length === 0 ? "border-l-4 border-l-green-400" : "border-l-4 border-l-amber-400"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+          <div className="text-xs text-gray-500 mt-1">
+            规范依据 {item.normative_count || 0} 条 · 方法参考 {item.method_count || 0} 条
+          </div>
+        </div>
+        <span className={`text-xs px-2 py-1 rounded ${missing.length === 0 ? "bg-green-50 text-green-700" : "bg-amber-50 text-amber-700"}`}>
+          {missing.length === 0 ? "资料可用" : "依据不足"}
+        </span>
+      </div>
+      <div className="grid md:grid-cols-3 gap-2 mt-3 text-xs">
+        <div className={item.has_textbook ? "text-green-700" : "text-red-600"}>教材：{item.has_textbook ? "已覆盖" : "缺少"}</div>
+        <div className={item.has_standard_or_exam ? "text-green-700" : "text-red-600"}>课标/考纲/单元目标：{item.has_standard_or_exam ? "已覆盖" : "缺少"}</div>
+        <div className={item.has_method_case ? "text-green-700" : "text-red-600"}>方法案例：{item.has_method_case ? "已覆盖" : "缺少"}</div>
+      </div>
+      {missing.length > 0 && (
+        <div className="mt-3 rounded bg-amber-50 border border-amber-100 px-3 py-2 text-xs text-amber-800">
+          {missing.join("；")}
+        </div>
+      )}
+      {Object.keys(counts).length > 0 && (
+        <div className="flex gap-1 flex-wrap mt-3">
+          {Object.entries(counts).map(([docType, count]) => (
+            <span key={docType} className="text-[11px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+              {DOC_TYPE_OPTIONS.find(opt => opt.value === docType)?.label || docType}: {count}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DeviceInfoPanel({ token }: { token: string }) {
-  const [info, setInfo] = useState<any>(null);
+  const [info, setInfo] = useState<DeviceInfo | null>(null);
   useEffect(() => {
-    fetch("/api/admin/device-info", { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`${API}/admin/device-info`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json()).then(setInfo).catch(() => {});
   }, [token]);
   if (!info) return <div><h2 className="text-lg font-bold text-gray-800 mb-4">🔐 设备信息</h2><p className="text-gray-400 text-sm">加载中...</p></div>;

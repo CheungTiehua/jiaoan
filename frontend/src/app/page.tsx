@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
+import type { CSSProperties } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import MermaidMindmap from "../components/MermaidMindmap";
@@ -8,9 +9,100 @@ import MermaidMindmap from "../components/MermaidMindmap";
 const API = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 type Tab = "exam" | "peer" | "plan" | "guide" | "lessonMindmap" | "methodMindmap";
+type AuxSection = "exam" | "peer" | "guide";
 
 interface TextbookGrade { grade: string; semesters: { name: string; units: { name: string; lessons: { title: string; type?: string }[] }[] }[] }
 interface HistoryItem { id: string; timestamp: string; grade: string; lesson: string; exam_analysis: string; peer_analysis: string }
+interface CollabGroup { name: string; members?: string[] }
+interface CollabComment { username?: string; text?: string }
+interface GroupPlan { shared_by?: string; lesson?: string; grade?: string; timestamp?: string; comments?: CollabComment[] }
+interface GroupTask { lesson?: string; assigned_to?: string; done?: boolean; status?: string }
+interface WifiNetwork { ssid: string; signal: number; security?: string }
+type SseEvent = { event: string; data: Record<string, unknown> };
+
+interface TeachingEvidence {
+  id: string;
+  source_role: "normative" | "method_case";
+  doc_type: string;
+  doc_title: string;
+  page_num?: number;
+  page_width?: number;
+  page_height?: number;
+  bbox?: number[];
+  content: string;
+  source_file_id?: string;
+  source_file_name?: string;
+  source_hash?: string;
+  page_image_url?: string;
+  dee_url?: string;
+}
+
+interface GeneratedBlock {
+  id: string;
+  block_type: string;
+  evidence_ids: string[];
+  reference_ids: string[];
+  evidence_status: "supported" | "insufficient" | "not_required";
+}
+
+function getErrorMessage(error: unknown, fallback = "操作失败") {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function parseSseBlock(block: string): SseEvent | null {
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const line of block.split("\n")) {
+    if (line.startsWith("event:")) event = line.slice(6).trim();
+    if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+  }
+  if (dataLines.length === 0) return null;
+  try {
+    const parsed = JSON.parse(dataLines.join("\n"));
+    return { event, data: parsed };
+  } catch {
+    return null;
+  }
+}
+
+const DOC_TYPE_LABEL: Record<string, string> = {
+  textbook: "教材",
+  curriculum_standard: "课标",
+  exam_outline: "考纲",
+  unit_goal: "单元目标",
+  exam_material: "考试资料",
+  teaching_guidance: "教学设计指导",
+  teacher_case: "老教师案例",
+  local_case: "本校案例",
+  training_case: "进修校案例",
+};
+
+const BLOCK_TYPE_LABEL: Record<string, string> = {
+  textbook_analysis: "教材分析",
+  student_analysis: "学情分析",
+  teaching_goal: "教学目标",
+  key_point: "教学重难点",
+  exam_point: "考点分析",
+  teaching_activity: "教学活动",
+  homework: "作业",
+  board_design: "板书",
+  guidance: "辅导/反思",
+};
+
+function bboxOverlayStyle(item: TeachingEvidence): CSSProperties | null {
+  const box = item.bbox || [];
+  if (box.length < 4 || !item.page_width || !item.page_height) return null;
+  const [x0, y0, x1, y1] = box;
+  const width = Math.max(0, x1 - x0);
+  const height = Math.max(0, y1 - y0);
+  if (width <= 0 || height <= 0) return null;
+  return {
+    left: `${(x0 / item.page_width) * 100}%`,
+    top: `${(y0 / item.page_height) * 100}%`,
+    width: `${(width / item.page_width) * 100}%`,
+    height: `${(height / item.page_height) * 100}%`,
+  };
+}
 
 export default function Home() {
   // Auth
@@ -33,11 +125,11 @@ export default function Home() {
 
   // Collab
   const [showCollab, setShowCollab] = useState(false);
-  const [groups, setGroups] = useState<any[]>([]);
+  const [groups, setGroups] = useState<CollabGroup[]>([]);
   const [myGroups, setMyGroups] = useState<string[]>([]);
   const [activeGroup, setActiveGroup] = useState("");
-  const [groupPlans, setGroupPlans] = useState<any[]>([]);
-  const [groupTasks, setGroupTasks] = useState<any[]>([]);
+  const [groupPlans, setGroupPlans] = useState<GroupPlan[]>([]);
+  const [groupTasks, setGroupTasks] = useState<GroupTask[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [collabComment, setCollabComment] = useState("");
 
@@ -61,12 +153,20 @@ export default function Home() {
 
   // Results
   const [loading, setLoading] = useState(false);
+  const [sectionLoading, setSectionLoading] = useState<AuxSection | "">("");
+  const [generationPhase, setGenerationPhase] = useState("");
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [generationElapsed, setGenerationElapsed] = useState(0);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("plan");
   const [examAnalysis, setExamAnalysis] = useState("");
   const [peerAnalysis, setPeerAnalysis] = useState("");
   const [lessonPlan, setLessonPlan] = useState("");
   const [teachingGuide, setTeachingGuide] = useState("");
+  const [teachingEvidence, setTeachingEvidence] = useState<TeachingEvidence[]>([]);
+  const [generatedBlocks, setGeneratedBlocks] = useState<GeneratedBlock[]>([]);
+  const [missingEvidence, setMissingEvidence] = useState<string[]>([]);
+  const [selectedEvidence, setSelectedEvidence] = useState<TeachingEvidence | null>(null);
 
   // Mindmap
   const [lessonMindmap, setLessonMindmap] = useState("");
@@ -83,7 +183,7 @@ export default function Home() {
   // Setup wizard
   const [needsSetup, setNeedsSetup] = useState(false);
   const [setupStep, setSetupStep] = useState(1);
-  const [wifiList, setWifiList] = useState<any[]>([]);
+  const [wifiList, setWifiList] = useState<WifiNetwork[]>([]);
   const [wifiSSID, setWifiSSID] = useState("");
   const [wifiPass, setWifiPass] = useState("");
   const [wifiScanning, setWifiScanning] = useState(false);
@@ -101,12 +201,41 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (!d.username) {
+          setToken("");
+          setUsername("");
+          setUserRole("");
+          localStorage.removeItem("lekai_token");
+          return;
+        }
+        setUsername(d.username);
+        setUserRole(d.role || "teacher");
+      })
+      .catch(() => {});
+  }, [token]);
+
   // Load textbooks
   useEffect(() => {
     const ctrl = new AbortController();
     fetch(`${API}/textbooks`, { signal: ctrl.signal }).then(r => r.json()).then(d => setTextbooks(d.textbooks || [])).catch(() => {});
     return () => ctrl.abort();
   }, []);
+
+  useEffect(() => {
+    if (!generationStartedAt) {
+      setGenerationElapsed(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setGenerationElapsed(Math.floor((Date.now() - generationStartedAt) / 1000));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [generationStartedAt]);
 
   // Auth handlers
   const doAuth = async () => {
@@ -119,10 +248,10 @@ export default function Home() {
       const d = await res.json();
       if (!res.ok) throw new Error(d.detail || "操作失败");
       setToken(d.token);
-    setUsername(authUser);
-    setUserRole(d.role || "teacher");
-    localStorage.setItem("lekai_token", d.token);
-    } catch (e: any) { setAuthError(e.message); }
+      setUsername(d.username || authUser);
+      setUserRole(d.role || "teacher");
+      localStorage.setItem("lekai_token", d.token);
+    } catch (e: unknown) { setAuthError(getErrorMessage(e)); }
   };
 
   const doLogout = () => {
@@ -149,6 +278,19 @@ export default function Home() {
     } catch { }
   };
 
+  useEffect(() => {
+    if (!showCollab || !token || !activeGroup) return;
+    const ctrl = new AbortController();
+    Promise.all([
+      fetch(`${API}/collab/groups/${encodeURIComponent(activeGroup)}/plans`, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal }).then(r => r.json()),
+      fetch(`${API}/collab/groups/${encodeURIComponent(activeGroup)}/tasks`, { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal }).then(r => r.json()),
+    ]).then(([pr, tr]) => {
+      setGroupPlans(pr.plans || []);
+      setGroupTasks(tr.tasks || []);
+    }).catch(() => {});
+    return () => ctrl.abort();
+  }, [showCollab, token, activeGroup]);
+
   const loadGroupDetails = async (g: string) => {
     setActiveGroup(g);
     const [pr, tr] = await Promise.all([
@@ -157,6 +299,55 @@ export default function Home() {
     ]);
     setGroupPlans(pr.plans || []); setGroupTasks(tr.tasks || []);
   };
+
+  const applyEvidenceMetadata = useCallback((d: {
+    teaching_evidence?: TeachingEvidence[];
+    generated_blocks?: GeneratedBlock[];
+    missing_evidence?: string[];
+  }) => {
+    if (d.teaching_evidence) {
+      setTeachingEvidence(prev => {
+        const map = new Map<string, TeachingEvidence>();
+        [...prev, ...(d.teaching_evidence || [])].forEach(item => {
+          if (item.id) map.set(item.id, item);
+        });
+        return Array.from(map.values());
+      });
+    }
+    if (d.generated_blocks) {
+      setGeneratedBlocks(prev => {
+        const map = new Map<string, GeneratedBlock>();
+        [...prev, ...(d.generated_blocks || [])].forEach(item => {
+          if (item.id) map.set(item.id, item);
+        });
+        return Array.from(map.values());
+      });
+    }
+    if (d.missing_evidence) {
+      setMissingEvidence(prev => Array.from(new Set([...prev, ...(d.missing_evidence || [])])));
+    }
+  }, []);
+
+  const refreshRecordMetadata = useCallback(async (id: string) => {
+    if (!id) return;
+    const res = await fetch(`${API}/history/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return;
+    const d = await res.json();
+    setTeachingEvidence(d.teaching_evidence || []);
+    setGeneratedBlocks(d.generated_blocks || []);
+    setMissingEvidence(d.missing_evidence || []);
+  }, [token]);
+
+  const openEvidenceDetail = useCallback(async (item: TeachingEvidence) => {
+    try {
+      const res = await fetch(`${API}/evidence/${encodeURIComponent(item.id)}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        setSelectedEvidence(await res.json());
+        return;
+      }
+    } catch {}
+    setSelectedEvidence(item);
+  }, [token]);
 
   const loadHistoryDetail = async (id: string, lesson: string) => {
     try {
@@ -170,6 +361,10 @@ export default function Home() {
         setTeachingGuide(d.teaching_guide || "");
         setLessonMindmap(d.lesson_mindmap_mermaid || "");
         setMethodMindmap(d.method_mindmap_mermaid || "");
+        setTeachingEvidence(d.teaching_evidence || []);
+        setGeneratedBlocks(d.generated_blocks || []);
+        setMissingEvidence(d.missing_evidence || []);
+        setSelectedEvidence(null);
         setMindmapError("");
         setMindmapSaveStatus("");
         setActiveTab("plan");
@@ -181,12 +376,13 @@ export default function Home() {
   // Generate
   const handleGenerate = useCallback(async () => {
     if (!lesson.trim()) { setError("请选择课题"); return; }
-    setError(""); setLoading(true);
+    setError(""); setLoading(true); setGenerationStartedAt(Date.now()); setGenerationPhase("正在准备");
     setExamAnalysis(""); setPeerAnalysis(""); setLessonPlan(""); setTeachingGuide("");
+    setTeachingEvidence([]); setGeneratedBlocks([]); setMissingEvidence([]); setSelectedEvidence(null);
     setLessonMindmap(""); setMethodMindmap(""); setMindmapError(""); setMindmapSaveStatus("");
     setRevisionHistory([]); setRevisionInput(""); setActiveTab("plan");
     try {
-      const res = await fetch(`${API}/generate`, {
+      const res = await fetch(`${API}/generate/stream`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ grade, lesson, requirements, class_hours: classHours, semester }),
       });
@@ -195,15 +391,83 @@ export default function Home() {
         try { const d = await res.json(); detail = d.detail || detail; } catch {}
         throw new Error(detail);
       }
+      if (!res.body) throw new Error("浏览器不支持流式响应");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let gotDone = false;
+      let generatedRecordId = "";
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split("\n\n");
+        buffer = blocks.pop() || "";
+        for (const block of blocks) {
+          const msg = parseSseBlock(block);
+          if (!msg) continue;
+          if (msg.event === "status") {
+            setGenerationPhase(String(msg.data.message || "正在生成"));
+          }
+          if (msg.event === "token") {
+            const text = String(msg.data.text || "");
+            if (text) setLessonPlan(prev => prev + text);
+          }
+          if (msg.event === "done") {
+            generatedRecordId = String(msg.data.record_id || "");
+            setLastPlanId(generatedRecordId);
+            if (Array.isArray(msg.data.missing_evidence)) {
+              setMissingEvidence(msg.data.missing_evidence.map(String));
+            }
+            gotDone = true;
+          }
+          if (msg.event === "error") {
+            throw new Error(String(msg.data.detail || "生成失败"));
+          }
+        }
+      }
+      if (!gotDone) throw new Error("生成连接中断，请重试");
+      if (generatedRecordId) await refreshRecordMetadata(generatedRecordId);
+    } catch (e: unknown) { setError(getErrorMessage(e)); }
+    finally { setLoading(false); setGenerationStartedAt(null); setGenerationPhase(""); }
+  }, [grade, lesson, requirements, classHours, semester, token, refreshRecordMetadata]);
+
+  const handleGenerateSection = useCallback(async (section: AuxSection) => {
+    if (!lesson.trim()) { setError("请选择课题"); return; }
+    if (section === "guide" && !lessonPlan.trim()) { setError("请先生成教案"); return; }
+    setError("");
+    setSectionLoading(section);
+    const endpoint = section === "exam" ? "exam" : section === "peer" ? "peer" : "guide";
+    try {
+      const res = await fetch(`${API}/generate/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          grade, lesson, requirements, class_hours: classHours, semester,
+          record_id: lastPlanId,
+          lesson_plan: lessonPlan,
+          exam_analysis: examAnalysis,
+          peer_analysis: peerAnalysis,
+        }),
+      });
+      if (!res.ok) {
+        let detail = "生成失败";
+        try { const d = await res.json(); detail = d.detail || detail; } catch {}
+        throw new Error(detail);
+      }
       const d = await res.json();
-      setExamAnalysis(d.exam_analysis || "");
-      setPeerAnalysis(d.peer_analysis || "");
-      setLessonPlan(d.lesson_plan || "");
-      setTeachingGuide(d.teaching_guide || "");
-      setLastPlanId(d.record_id || "");
-    } catch (e: any) { setError(e.message); }
-    finally { setLoading(false); }
-  }, [grade, lesson, requirements, classHours, semester, token]);
+      if (section === "exam") setExamAnalysis(d.exam_analysis || "");
+      if (section === "peer") setPeerAnalysis(d.peer_analysis || "");
+      if (section === "guide") setTeachingGuide(d.teaching_guide || "");
+      applyEvidenceMetadata(d);
+      if (lastPlanId) await refreshRecordMetadata(lastPlanId);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e));
+    } finally {
+      setSectionLoading("");
+    }
+  }, [grade, lesson, requirements, classHours, semester, token, lastPlanId, lessonPlan, examAnalysis, peerAnalysis, applyEvidenceMetadata, refreshRecordMetadata]);
 
   // Revise
   const handleRevise = useCallback(async () => {
@@ -223,7 +487,7 @@ export default function Home() {
       const d = await res.json();
       setRevisionHistory(prev => [...prev, revisionInput, "修改完成"]);
       setLessonPlan(d.lesson_plan); setRevisionInput(""); setActiveTab("plan");
-    } catch (e: any) { setError(e.message); }
+    } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setRevising(false); }
   }, [revisionInput, revisionHistory, lessonPlan, token]);
 
@@ -237,7 +501,7 @@ export default function Home() {
       });
       if (!res.ok) throw new Error("生成失败");
       const d = await res.json(); setUnitPlan(d.unit_plan || "");
-    } catch (e: any) { setError(e.message); }
+    } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setLoadingUnit(false); }
   };
 
@@ -283,7 +547,7 @@ export default function Home() {
           if (!saveRes.ok) setMindmapSaveStatus("导图已生成，但保存到历史记录失败");
         } catch { setMindmapSaveStatus("导图已生成，但保存到历史记录失败"); }
       }
-    } catch (e: any) { setMindmapError(e.message); }
+    } catch (e: unknown) { setMindmapError(getErrorMessage(e)); }
     finally { setMindmapLoading(false); }
   }, [lessonPlan, teachingGuide, examAnalysis, peerAnalysis, grade, lesson, token, lastPlanId]);
 
@@ -316,11 +580,15 @@ export default function Home() {
       });
       if (!res.ok) throw new Error("生成失败");
       const d = await res.json(); setReflection(d.reflection || "");
-    } catch (e: any) { setError(e.message); }
+    } catch (e: unknown) { setError(getErrorMessage(e)); }
     finally { setLoadingReflect(false); }
   };
 
-  const selectLesson = useCallback((g: string, s: string, l: string) => { setGrade(g); setSemester(s); setLesson(l); }, []);
+  const selectLesson = useCallback((g: string, s: string, l: string) => {
+    setGrade(g);
+    setSemester(s.startsWith("下") ? "下" : "上");
+    setLesson(l);
+  }, []);
 
   const tabContent = () => {
     switch (activeTab) {
@@ -337,6 +605,15 @@ export default function Home() {
     { key: "plan", label: "教案", icon: "📝" }, { key: "guide", label: "辅导", icon: "🎓" },
     { key: "lessonMindmap", label: "教案导图", icon: "🗺️" }, { key: "methodMindmap", label: "备课方法", icon: "🧠" },
   ];
+  const normativeEvidence = teachingEvidence.filter(item => item.source_role === "normative");
+  const methodEvidence = teachingEvidence.filter(item => item.source_role === "method_case");
+  const insufficientBlocks = generatedBlocks.filter(item => item.evidence_status === "insufficient");
+  const evidenceById = useMemo(() => {
+    const map = new Map<string, TeachingEvidence>();
+    teachingEvidence.forEach(item => map.set(item.id, item));
+    return map;
+  }, [teachingEvidence]);
+  const selectedBboxStyle = selectedEvidence ? bboxOverlayStyle(selectedEvidence) : null;
 
   // ---- SETUP WIZARD ----
   if (needsSetup) {
@@ -546,7 +823,7 @@ export default function Home() {
                 <select value={grade} onChange={e => setGrade(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none">
                   {["一年级","二年级","三年级","四年级","五年级","六年级"].map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
-                <select value={semester} onChange={e => setSemester(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none">
+                <select value={semester.startsWith("下") ? "下" : "上"} onChange={e => setSemester(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none">
                   <option value="上">上册</option><option value="下">下册</option>
                 </select>
                 <select value={classHours} onChange={e => setClassHours(e.target.value)} className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white focus:ring-2 focus:ring-amber-400 outline-none">
@@ -555,7 +832,7 @@ export default function Home() {
                 <input type="text" value={lesson} onChange={e => setLesson(e.target.value)} placeholder="课题" className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-amber-400 outline-none w-32" />
                 <button onClick={handleGenerate} disabled={loading}
                   className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white font-medium px-4 py-1 rounded-lg text-sm transition-colors">
-                  {loading ? "生成中..." : "生成"}
+                  {loading ? `生成中 ${generationElapsed}s` : "生成教案"}
                 </button>
                 <input type="text" value={unitName} onChange={e => setUnitName(e.target.value)}
                   placeholder="单元名" className="border border-gray-300 rounded-lg px-2 py-1 text-sm w-28" />
@@ -566,6 +843,11 @@ export default function Home() {
               </div>
               <textarea value={requirements} onChange={e => setRequirements(e.target.value)} placeholder="教学要求（可选）" rows={1}
                 className="w-full border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-amber-400 outline-none resize-none" />
+              {loading && (
+                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                  {generationPhase || "正在流式生成教案"}，正文会逐步显示。考点分析、同行参考、辅导说明可在教案生成后按需生成。
+                </div>
+              )}
               {error && <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">{error}</div>}
             </div>
 
@@ -574,7 +856,7 @@ export default function Home() {
               <div className="bg-white rounded-xl shadow-sm border border-amber-100 overflow-hidden mb-4">
                 <div className="flex border-b border-gray-200 overflow-x-auto">
                   {TABS.map(t => {
-                    const has = (t.key === "exam" && examAnalysis) || (t.key === "peer" && peerAnalysis) || (t.key === "plan" && lessonPlan) || (t.key === "guide" && teachingGuide) || (t.key === "lessonMindmap" && lessonPlan) || (t.key === "methodMindmap" && lessonPlan);
+                    const has = (t.key === "exam" && (lessonPlan || examAnalysis)) || (t.key === "peer" && (lessonPlan || peerAnalysis)) || (t.key === "plan" && lessonPlan) || (t.key === "guide" && (lessonPlan || teachingGuide)) || (t.key === "lessonMindmap" && lessonPlan) || (t.key === "methodMindmap" && lessonPlan);
                     return (
                       <button key={t.key} onClick={() => setActiveTab(t.key)} disabled={!has}
                         className={`flex-1 py-2 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === t.key ? "text-amber-700 border-b-2 border-amber-500 bg-amber-50" : has ? "text-gray-500 hover:text-gray-700" : "text-gray-300 cursor-not-allowed"}`}>
@@ -598,11 +880,155 @@ export default function Home() {
                         activeTab === "lessonMindmap" ? "教案导图" : "备课方法导图"
                       )}
                     />
+                  ) : (activeTab === "exam" || activeTab === "peer" || activeTab === "guide") && !tabContent() ? (
+                    <AuxSectionEmpty
+                      section={activeTab}
+                      loading={sectionLoading === activeTab}
+                      disabled={!!sectionLoading}
+                      onGenerate={() => handleGenerateSection(activeTab)}
+                    />
                   ) : (
                     <div className="prose prose-amber prose-sm max-w-none">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{tabContent()}</ReactMarkdown>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {lessonPlan && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800">依据与参考</h3>
+                    <p className="text-xs text-gray-500">规范材料用于教学判断，案例材料只作为参考做法。</p>
+                  </div>
+                  {insufficientBlocks.length > 0 && (
+                    <span className="text-xs px-2 py-1 rounded bg-red-50 text-red-700 border border-red-100">
+                      {insufficientBlocks.length} 处依据不足
+                    </span>
+                  )}
+                </div>
+                {missingEvidence.length > 0 && (
+                  <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    {missingEvidence.join("；")}
+                  </div>
+                )}
+                {generatedBlocks.length > 0 && (
+                  <div className="mb-3 rounded border border-slate-100 bg-slate-50 p-3">
+                    <div className="text-xs font-semibold text-slate-700 mb-2">模块依据状态</div>
+                    <div className="space-y-2">
+                      {generatedBlocks.map(block => (
+                        <div key={block.id} className="rounded bg-white border border-slate-100 px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium text-slate-800">{BLOCK_TYPE_LABEL[block.block_type] || block.block_type}</span>
+                            <span className={`px-2 py-0.5 rounded ${
+                              block.evidence_status === "supported" ? "bg-emerald-50 text-emerald-700" :
+                              block.evidence_status === "insufficient" ? "bg-red-50 text-red-700" :
+                              "bg-gray-50 text-gray-500"
+                            }`}>
+                              {block.evidence_status === "supported" ? "有依据" : block.evidence_status === "insufficient" ? "依据不足" : "无需依据"}
+                            </span>
+                          </div>
+                          {(block.evidence_ids.length > 0 || block.reference_ids.length > 0) && (
+                            <div className="flex gap-1 flex-wrap mt-2">
+                              {block.evidence_ids.map(id => {
+                                const item = evidenceById.get(id);
+                                if (!item) return null;
+                                return (
+                                  <button key={id} onClick={() => openEvidenceDetail(item)}
+                                    className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 hover:bg-emerald-100">
+                                    依据：{DOC_TYPE_LABEL[item.doc_type] || item.doc_type}
+                                  </button>
+                                );
+                              })}
+                              {block.reference_ids.map(id => {
+                                const item = evidenceById.get(id);
+                                if (!item) return null;
+                                return (
+                                  <button key={id} onClick={() => openEvidenceDetail(item)}
+                                    className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 hover:bg-blue-100">
+                                    参考：{DOC_TYPE_LABEL[item.doc_type] || item.doc_type}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div className="rounded border border-emerald-100 bg-emerald-50/60 p-3">
+                    <div className="text-xs font-semibold text-emerald-800 mb-2">规范依据</div>
+                    {normativeEvidence.length === 0 ? (
+                      <div className="text-xs text-emerald-700">暂无可追溯规范依据。请补充教材、课标、考纲或单元目标。</div>
+                    ) : normativeEvidence.slice(0, 8).map(item => (
+                      <button key={item.id} onClick={() => openEvidenceDetail(item)}
+                        className="block w-full text-left text-xs bg-white border border-emerald-100 rounded px-2 py-2 mb-2 hover:border-emerald-300">
+                        <div className="font-medium text-emerald-900">依据：{DOC_TYPE_LABEL[item.doc_type] || item.doc_type}</div>
+                        <div className="text-gray-600 truncate">{item.doc_title || "知识库材料"}{item.page_num ? ` · 第${item.page_num}页` : ""}</div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="rounded border border-blue-100 bg-blue-50/60 p-3">
+                    <div className="text-xs font-semibold text-blue-800 mb-2">参考做法</div>
+                    {methodEvidence.length === 0 ? (
+                      <div className="text-xs text-blue-700">暂无方法参考。可补充教学设计指导、老教师教案或本校案例。</div>
+                    ) : methodEvidence.slice(0, 8).map(item => (
+                      <button key={item.id} onClick={() => openEvidenceDetail(item)}
+                        className="block w-full text-left text-xs bg-white border border-blue-100 rounded px-2 py-2 mb-2 hover:border-blue-300">
+                        <div className="font-medium text-blue-900">参考：{DOC_TYPE_LABEL[item.doc_type] || item.doc_type}</div>
+                        <div className="text-gray-600 truncate">{item.doc_title || "知识库材料"}{item.page_num ? ` · 第${item.page_num}页` : ""}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {selectedEvidence && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-800">
+                      {selectedEvidence.source_role === "normative" ? "依据" : "参考"}：{DOC_TYPE_LABEL[selectedEvidence.doc_type] || selectedEvidence.doc_type}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      {selectedEvidence.doc_title || "知识库材料"}
+                      {selectedEvidence.page_num ? ` · 第${selectedEvidence.page_num}页` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedEvidence.dee_url && (
+                      <a href={selectedEvidence.dee_url} target="_blank" rel="noreferrer"
+                        className="text-xs text-blue-600 hover:text-blue-800">
+                        打开原文
+                      </a>
+                    )}
+                    <button onClick={() => setSelectedEvidence(null)} className="text-xs text-gray-400 hover:text-gray-600">关闭</button>
+                  </div>
+                </div>
+                {(selectedEvidence.page_width || selectedEvidence.page_height || (selectedEvidence.bbox || []).length > 0) && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    原文定位：page={selectedEvidence.page_num || 0}，bbox=[{(selectedEvidence.bbox || []).join(", ")}]
+                  </div>
+                )}
+                {selectedEvidence.page_image_url && (
+                  <div className="mt-3 overflow-auto rounded border border-slate-200 bg-slate-100 p-2">
+                    <div className="relative mx-auto max-w-full" style={{ width: selectedEvidence.page_width ? `${selectedEvidence.page_width}px` : "100%" }}>
+                      {/* DEE page images can come from an internal appliance URL that is not known at build time. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={selectedEvidence.page_image_url} alt="原文页" className="block h-auto max-w-full" />
+                      {selectedBboxStyle && (
+                        <div className="absolute border-2 border-red-500 bg-red-400/20 shadow-[0_0_0_9999px_rgba(0,0,0,0.08)]" style={selectedBboxStyle} />
+                      )}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-3 rounded border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                  {selectedEvidence.content}
                 </div>
               </div>
             )}
@@ -672,7 +1098,7 @@ export default function Home() {
                 </div>
                 {groups.length === 0 && <div className="text-xs text-gray-400">暂无教研组，创建一个吧</div>}
                 <div className="flex gap-1 flex-wrap mb-3">
-                  {groups.map((g: any) => (
+                  {groups.map((g) => (
                     <button key={g.name} onClick={() => { loadGroupDetails(g.name); }}
                       className={`text-xs px-2 py-1 rounded ${activeGroup === g.name ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-blue-50"}`}>
                       {g.name} ({g.members?.length || 0}人)
@@ -694,11 +1120,11 @@ export default function Home() {
                         loadGroupDetails(activeGroup);
                       }} className="text-xs text-blue-600 underline">分配备课任务</button>
                     </div>
-                    {groupPlans.map((p: any, i: number) => (
+                    {groupPlans.map((p, i) => (
                       <div key={i} className="text-xs border-b border-gray-100 py-1">
                         <span className="font-medium">{p.shared_by}</span> · 《{p.lesson}》{p.grade}
                         <span className="text-gray-400 ml-2">{p.timestamp?.slice(0, 16)}</span>
-                        {p.comments?.map((c: any, j: number) => (
+                        {p.comments?.map((c, j) => (
                           <div key={j} className="ml-4 text-gray-500">{c.username}: {c.text}</div>
                         ))}
                         <div className="flex gap-1 mt-1">
@@ -710,6 +1136,24 @@ export default function Home() {
                         </div>
                       </div>
                     ))}
+                    <div className="mt-3 border-t border-gray-100 pt-2">
+                      <div className="text-xs font-semibold text-gray-600 mb-1">备课任务 ({groupTasks.length})</div>
+                      {groupTasks.length === 0 && <div className="text-xs text-gray-400">暂无任务</div>}
+                      {groupTasks.map((task, i) => (
+                        <div key={i} className="flex items-center justify-between gap-2 text-xs border-b border-gray-50 py-1">
+                          <div>
+                            <span className={task.done || task.status === "done" ? "line-through text-gray-400" : "text-gray-700"}>《{task.lesson}》</span>
+                            <span className="text-gray-400 ml-2">指派给 {task.assigned_to}</span>
+                          </div>
+                          {!(task.done || task.status === "done") && (
+                            <button onClick={async () => {
+                              await fetch(`${API}/collab/tasks/complete`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ group: activeGroup, task_index: i }) });
+                              loadGroupDetails(activeGroup);
+                            }} className="text-blue-600 hover:underline">完成</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -869,6 +1313,31 @@ export default function Home() {
           </div>
         </main>
       </div>
+    </div>
+  );
+}
+
+function AuxSectionEmpty({
+  section, loading, disabled, onGenerate,
+}: {
+  section: AuxSection; loading: boolean; disabled: boolean; onGenerate: () => void;
+}) {
+  const meta = {
+    exam: { title: "考点分析", desc: "生成本课常考字词、阅读理解、仿写迁移和易错点。", action: "生成考点分析" },
+    peer: { title: "同行参考", desc: "从知识库提取其他老师的教学思路、环节设计和可借鉴做法。", action: "生成同行参考" },
+    guide: { title: "辅导说明", desc: "基于当前教案生成上课建议、亮点分析和避坑提示。", action: "生成辅导说明" },
+  }[section];
+  return (
+    <div className="text-center py-10">
+      <div className="text-sm font-semibold text-gray-700 mb-2">{meta.title}尚未生成</div>
+      <p className="text-xs text-gray-400 mb-4">{meta.desc}</p>
+      <button
+        onClick={onGenerate}
+        disabled={disabled}
+        className="bg-amber-600 hover:bg-amber-700 disabled:bg-amber-300 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+      >
+        {loading ? "生成中..." : meta.action}
+      </button>
     </div>
   );
 }

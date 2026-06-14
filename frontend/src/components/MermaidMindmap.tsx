@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import type mermaid from "mermaid";
 
 type MermaidMindmapProps = {
   code: string;
@@ -9,9 +10,10 @@ type MermaidMindmapProps = {
 export default function MermaidMindmap({ code }: MermaidMindmapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const initializedRef = useRef(false);
-  const mermaidRef = useRef<any>(null);
+  const mermaidRef = useRef<typeof mermaid | null>(null);
   const [error, setError] = useState("");
-  const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2, 9)}`);
+  const reactId = useId();
+  const idRef = useRef(`mermaid-${reactId.replace(/[^a-zA-Z0-9_-]/g, "")}`);
 
   useEffect(() => {
     if (!code.trim()) {
@@ -34,9 +36,9 @@ export default function MermaidMindmap({ code }: MermaidMindmapProps) {
           containerRef.current.innerHTML = svg;
           setError("");
         }
-      } catch (e: any) {
+      } catch (e) {
         if (!cancelled) {
-          setError(e.message || "渲染失败");
+          setError(e instanceof Error ? e.message : "渲染失败");
         }
       }
     };

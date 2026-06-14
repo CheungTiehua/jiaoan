@@ -79,6 +79,18 @@ CHUNK_SECTIONS = [
     "板书设计", "作业布置", "教学反思"
 ]
 
+GRADE_DIRS = {
+    "grade-1": "一年级",
+    "grade-2": "二年级",
+    "grade-3": "三年级",
+    "grade-4": "四年级",
+    "grade-5": "五年级",
+    "grade-6": "六年级",
+}
+
+NORMATIVE_DOC_TYPES = {"textbook", "curriculum_standard", "exam_outline", "unit_goal", "exam_material"}
+METHOD_DOC_TYPES = {"teaching_guidance", "teacher_case", "local_case", "training_case"}
+
 
 # ============================================================
 # YAML Frontmatter 解析
@@ -101,6 +113,65 @@ def parse_frontmatter(filepath: Path) -> tuple[dict, str]:
     return meta, body.strip()
 
 
+def normalize_metadata(meta: dict, filepath: Path, body: str) -> dict:
+    """补齐旧教案缺失的关键元数据，保证年级过滤和课题检索可用。"""
+    normalized = dict(meta or {})
+
+    if not normalized.get("grade"):
+        for parent in filepath.parents:
+            if parent.name in GRADE_DIRS:
+                normalized["grade"] = GRADE_DIRS[parent.name]
+                break
+
+    if not normalized.get("lesson"):
+        title_match = re.search(r'#\s*《(.+?)》', body) or re.search(r'《(.+?)》', body)
+        normalized["lesson"] = title_match.group(1).strip() if title_match else filepath.stem
+
+    if not normalized.get("semester"):
+        normalized["semester"] = ""
+    if not normalized.get("type"):
+        normalized["type"] = "阅读课"
+    if not normalized.get("tags"):
+        normalized["tags"] = []
+
+    if not normalized.get("doc_type"):
+        normalized["doc_type"] = infer_doc_type(normalized, filepath, body)
+    if not normalized.get("source_role"):
+        normalized["source_role"] = "normative" if normalized["doc_type"] in NORMATIVE_DOC_TYPES else "method_case"
+
+    return normalized
+
+
+def infer_doc_type(meta: dict, filepath: Path, body: str) -> str:
+    locator = f"{filepath}\n{meta.get('source', '')}\n{meta.get('title', '')}\n{meta.get('doc_title', '')}".lower()
+    lesson_kind = str(meta.get("type") or "").lower()
+    body_head = body[:600].lower()
+
+    if any(k in locator for k in ["课标", "课程标准", "curriculum"]):
+        return "curriculum_standard"
+    if any(k in locator for k in ["考纲", "考试说明", "exam_outline"]):
+        return "exam_outline"
+    if any(k in locator for k in ["单元目标", "unit_goal"]):
+        return "unit_goal"
+    if any(k in locator for k in ["题库", "试题", "考点", "exam_material"]):
+        return "exam_material"
+    if any(k in locator for k in ["教材", "课文原文", "textbook"]):
+        return "textbook"
+
+    # 普通 Markdown 教案即使包含“教材分析”“考点”等章节，也只是方法样本。
+    if "教案" in body_head or "教学过程" in body_head or lesson_kind.endswith("课"):
+        return "local_case"
+
+    text = f"{locator}\n{body_head}"
+    if any(k in text for k in ["教学设计与指导", "教学指导", "teaching_guidance"]):
+        return "teaching_guidance"
+    if any(k in text for k in ["进修校", "training"]):
+        return "training_case"
+    if any(k in text for k in ["老教师", "teacher_case"]):
+        return "teacher_case"
+    return "local_case"
+
+
 # ============================================================
 # 分块 (Chunking)
 # ============================================================
@@ -120,9 +191,22 @@ def chunk_lesson(meta: dict, body: str, source_file: str) -> list[dict]:
     base_meta = {
         "source_file": source_file,
         "grade": grade,
+        "semester": str(meta.get("semester", "")),
         "lesson": lesson,
         "unit": str(unit),
         "lesson_type": lesson_type,
+        "doc_type": str(meta.get("doc_type", "local_case")),
+        "source_role": str(meta.get("source_role", "method_case")),
+        "doc_title": str(meta.get("doc_title") or meta.get("title") or lesson or source_file),
+        "source_file_id": str(meta.get("source_file_id") or meta.get("file_id") or source_file),
+        "source_file_name": str(meta.get("source_file_name") or meta.get("file_name") or source_file),
+        "source_hash": str(meta.get("source_hash") or hashlib.sha256(body.encode("utf-8")).hexdigest()),
+        "page_num": int(meta.get("page_num") or meta.get("page") or 0),
+        "page_width": int(meta.get("page_width") or 0),
+        "page_height": int(meta.get("page_height") or 0),
+        "bbox": json.dumps(meta.get("bbox", []), ensure_ascii=False) if isinstance(meta.get("bbox"), list) else str(meta.get("bbox", "")),
+        "page_image_url": str(meta.get("page_image_url") or meta.get("image_url") or ""),
+        "dee_url": str(meta.get("dee_url") or meta.get("source_url") or ""),
         "tags": json.dumps(tags, ensure_ascii=False) if tags else "",
     }
 
@@ -164,7 +248,11 @@ def chunk_lesson(meta: dict, body: str, source_file: str) -> list[dict]:
 
 def generate_embeddings(texts: list[str], batch_size: int = 32) -> list[list[float]]:
     """使用本地 BGE 模型生成 Embeddings"""
-    model = get_embedding_model()
+    try:
+        model = get_embedding_model()
+    except Exception as e:
+        print(f"[WARN] Embedding 模型不可用，使用占位向量完成入库: {e}")
+        return [_placeholder_embedding(text) for text in texts]
 
     all_embeddings = []
     for i in range(0, len(texts), batch_size):
@@ -181,6 +269,20 @@ def generate_embeddings(texts: list[str], batch_size: int = 32) -> list[list[flo
               f"({len(batch)} texts)")
 
     return all_embeddings
+
+
+def _placeholder_embedding(text: str) -> list[float]:
+    """Deterministic fallback embedding for offline placeholder knowledge."""
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    values: list[float] = []
+    while len(values) < EMBEDDING_DIM:
+        for byte in digest:
+            values.append((byte / 127.5) - 1.0)
+            if len(values) >= EMBEDDING_DIM:
+                break
+        digest = hashlib.sha256(digest).digest()
+    norm = sum(v * v for v in values) ** 0.5 or 1.0
+    return [v / norm for v in values]
 
 
 # ============================================================
@@ -229,6 +331,7 @@ def ingest(grade_filter: Optional[int] = None, reset: bool = False):
     all_chunks = []
     for f in md_files:
         meta, body = parse_frontmatter(f)
+        meta = normalize_metadata(meta, f, body)
         source_id = f.stem
         chunks = chunk_lesson(meta, body, source_id)
         all_chunks.extend(chunks)

@@ -8,6 +8,11 @@ services:
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-pro}
+      - DEEPSEEK_FAST_MODEL=${DEEPSEEK_FAST_MODEL:-deepseek-v4-flash}
+      - DEEPSEEK_MAX_TOKENS=${DEEPSEEK_MAX_TOKENS:-8192}
+      - DEEPSEEK_THINKING=${DEEPSEEK_THINKING:-disabled}
+      - DEEPSEEK_REASONING_EFFORT=${DEEPSEEK_REASONING_EFFORT:-}
       - LEKAI_ACCEPTANCE_MODE=${LEKAI_ACCEPTANCE_MODE:-0}
     volumes:
       - ./knowledge-base:/app/knowledge-base
@@ -21,7 +26,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-    mem_limit: 1g
+    mem_limit: 3g
     cpus: 1.0
     logging:
       driver: "json-file"
@@ -35,6 +40,9 @@ services:
       dockerfile: Dockerfile.frontend
       args:
         NEXT_PUBLIC_API_URL: /api
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - API_PROXY_TIMEOUT_MS=${API_PROXY_TIMEOUT_MS:-600000}
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://localhost:3000 || exit 1"]
@@ -42,7 +50,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
-    mem_limit: 256m
+    mem_limit: 512m
     cpus: 0.5
     logging:
       driver: "json-file"

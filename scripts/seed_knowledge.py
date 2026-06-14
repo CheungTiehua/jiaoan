@@ -24,9 +24,32 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 KNOWLEDGE_BASE = PROJECT_ROOT / "knowledge-base"
 
+_key_file = PROJECT_ROOT / "data" / "api_key.json"
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+if not DEEPSEEK_API_KEY and _key_file.exists():
+    try:
+        import json as _json
+        DEEPSEEK_API_KEY = _json.loads(_key_file.read_text()).get("api_key", "")
+    except Exception:
+        DEEPSEEK_API_KEY = ""
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-DEEPSEEK_MODEL = "deepseek-chat"
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-pro")
+DEEPSEEK_THINKING = os.environ.get("DEEPSEEK_THINKING", "enabled")
+DEEPSEEK_REASONING_EFFORT = os.environ.get("DEEPSEEK_REASONING_EFFORT", "high")
+
+
+def _post_deepseek(headers: dict, payload: dict, timeout: int = 180) -> requests.Response:
+    base = DEEPSEEK_BASE_URL.rstrip("/")
+    urls = [base] if base.endswith("/chat/completions") else [f"{base}/chat/completions", f"{base}/v1/chat/completions"]
+    resp = None
+    for url in dict.fromkeys(urls):
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+        if resp.status_code != 404:
+            break
+    if resp is not None and resp.status_code == 400 and ("thinking" in resp.text or "reasoning" in resp.text):
+        payload = {k: v for k, v in payload.items() if k not in ("thinking", "reasoning_effort")}
+        resp = requests.post(url, headers=headers, json=payload, timeout=timeout)
+    return resp
 
 # 每年级精选代表性课文（覆盖不同课型）
 SEED_SELECTIONS = {
@@ -159,15 +182,15 @@ def generate_seed(grade: str, lesson: str, semester: str, lesson_type: str, tags
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.4,
-        "max_tokens": 4096
+        "max_tokens": 4096,
+        "stream": False,
     }
+    if DEEPSEEK_THINKING:
+        payload["thinking"] = {"type": DEEPSEEK_THINKING}
+        if DEEPSEEK_REASONING_EFFORT:
+            payload["reasoning_effort"] = DEEPSEEK_REASONING_EFFORT
 
-    resp = requests.post(
-        f"{DEEPSEEK_BASE_URL}/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=180
-    )
+    resp = _post_deepseek(headers, payload, timeout=180)
     resp.raise_for_status()
     return resp.json()["choices"][0]["message"]["content"]
 

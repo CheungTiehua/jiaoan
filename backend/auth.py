@@ -226,6 +226,10 @@ def save_history(username: str, grade: str, lesson: str, plan: dict) -> str:
         "peer_analysis": plan.get("peer_analysis", ""),
         "lesson_plan": plan.get("lesson_plan", ""),
         "teaching_guide": plan.get("teaching_guide", ""),
+        "generated_blocks": plan.get("generated_blocks", []),
+        "teaching_evidence": plan.get("teaching_evidence", []),
+        "missing_evidence": plan.get("missing_evidence", []),
+        "citation_errors": plan.get("citation_errors", []),
     }
     from security import atomic_write
     atomic_write(filepath, json.dumps(record, ensure_ascii=False, indent=2).encode())
@@ -265,6 +269,10 @@ def get_history_detail(username: str, record_id: str) -> Optional[dict]:
         # 兼容老数据：确保导图字段存在
         data.setdefault("lesson_mindmap_mermaid", "")
         data.setdefault("method_mindmap_mermaid", "")
+        data.setdefault("generated_blocks", [])
+        data.setdefault("teaching_evidence", [])
+        data.setdefault("missing_evidence", [])
+        data.setdefault("citation_errors", [])
         return data
     except Exception:
         return None
@@ -280,6 +288,29 @@ def save_history_mindmap(username: str, record_id: str, lesson_mindmap: str, met
         data = json.loads(filepath.read_text())
         data["lesson_mindmap_mermaid"] = lesson_mindmap or ""
         data["method_mindmap_mermaid"] = method_mindmap or ""
+        from security import atomic_write
+        atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
+        return True
+    except Exception:
+        return False
+
+
+def update_history_fields(username: str, record_id: str, fields: dict) -> bool:
+    """Patch generated sections into an existing history record."""
+    safe_id = os.path.basename(str(record_id))
+    filepath = HISTORY_DIR / username / f"{safe_id}.json"
+    if not filepath.exists():
+        return False
+    allowed = {
+        "exam_analysis", "peer_analysis", "lesson_plan", "teaching_guide",
+        "lesson_mindmap_mermaid", "method_mindmap_mermaid",
+        "generated_blocks", "teaching_evidence", "missing_evidence", "citation_errors",
+    }
+    try:
+        data = json.loads(filepath.read_text())
+        for key, value in fields.items():
+            if key in allowed:
+                data[key] = "" if value is None else value
         from security import atomic_write
         atomic_write(filepath, json.dumps(data, ensure_ascii=False, indent=2).encode())
         return True

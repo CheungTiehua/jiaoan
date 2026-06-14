@@ -6,6 +6,7 @@ LeKai 双思维导图生成 — 教案导图 + 备课方法导图
 """
 
 import json
+import os
 import re
 
 
@@ -258,14 +259,92 @@ def _build_user_prompt(req) -> str:
     )
 
 
+def _first_lines(text: str, limit: int = 3) -> list[str]:
+    lines = []
+    for raw in text.splitlines():
+        line = raw.strip(" -\t\r\n")
+        if not line or line.startswith("#"):
+            continue
+        line = re.sub(r'^\d+[.、]\s*', '', line)
+        if line:
+            lines.append(line[:18])
+        if len(lines) >= limit:
+            break
+    return lines
+
+
+def _section_text(text: str, names: list[str]) -> str:
+    for name in names:
+        pattern = rf'(?:^|\n)#+\s*(?:[一二三四五六七八九十]+[、.．]?\s*)?{re.escape(name)}\s*\n([\s\S]*?)(?=\n#+\s|\Z)'
+        m = re.search(pattern, text)
+        if m:
+            return m.group(1).strip()
+    return ""
+
+
+def _children_from_text(text: str, fallback: list[str], limit: int = 3) -> list[dict]:
+    titles = _first_lines(text, limit=limit) or fallback[:limit]
+    return [{"title": title, "children": []} for title in titles]
+
+
+def _fallback_mindmap(req) -> dict:
+    lesson_plan = req.lesson_plan or ""
+    teaching_guide = req.teaching_guide or ""
+
+    target_text = _section_text(lesson_plan, ["教学目标"])
+    key_text = _section_text(lesson_plan, ["教学重难点", "教学重点"])
+    process_text = _section_text(lesson_plan, ["教学过程"])
+    board_text = _section_text(lesson_plan, ["板书设计"])
+    homework_text = _section_text(lesson_plan, ["作业布置", "作业与拓展"])
+    guide_text = teaching_guide[:1500]
+
+    lesson_outline = {
+        "title": f"《{req.lesson}》教案导图",
+        "nodes": [
+            {"title": "教学目标", "children": _children_from_text(target_text, ["知识能力", "过程方法", "情感态度"])},
+            {"title": "教学重点", "children": _children_from_text(key_text, ["品读语言", "理解结构", "朗读积累"], 2)},
+            {"title": "教学难点", "children": _children_from_text(key_text, ["读写迁移", "方法运用"], 2)},
+            {"title": "教学流程", "children": _children_from_text(process_text, ["导入新课", "初读感知", "精读品味", "拓展练习"], 4)},
+            {"title": "板书设计", "children": _children_from_text(board_text, ["结构清晰", "突出重点"], 2)},
+            {"title": "作业与拓展", "children": _children_from_text(homework_text, ["基础巩固", "拓展表达"], 2)},
+        ],
+    }
+    method_outline = {
+        "title": f"《{req.lesson}》备课方法导图",
+        "nodes": [
+            {"title": "备课起点", "children": [{"title": "研读教材", "children": []}, {"title": "分析学情", "children": []}]},
+            {"title": "目标提炼方法", "children": _children_from_text(target_text or guide_text, ["扣课标", "扣单元", "扣课后题"], 3)},
+            {"title": "重难点判断方法", "children": _children_from_text(key_text or guide_text, ["看学生基础", "看文本价值"], 2)},
+            {"title": "教学流程设计方法", "children": _children_from_text(process_text or guide_text, ["情境导入", "任务推进", "当堂反馈"], 3)},
+            {"title": "提问设计方法", "children": [{"title": "由浅入深", "children": []}, {"title": "指向表达", "children": []}]},
+            {"title": "活动设计方法", "children": [{"title": "朗读品味", "children": []}, {"title": "读写结合", "children": []}]},
+            {"title": "板书设计方法", "children": [{"title": "抓关键词", "children": []}, {"title": "显结构", "children": []}]},
+            {"title": "可迁移经验", "children": [{"title": "结构支架", "children": []}, {"title": "语言积累", "children": []}]},
+            {"title": "常见误区", "children": [{"title": "目标泛化", "children": []}, {"title": "活动散乱", "children": []}]},
+        ],
+    }
+    return {
+        "lesson_mindmap_mermaid": outline_to_mermaid(lesson_outline),
+        "method_mindmap_mermaid": outline_to_mermaid(method_outline),
+        "lesson_outline": lesson_outline,
+        "method_outline": method_outline,
+    }
+
+
 def generate_dual_mindmap(req) -> dict:
     """生成双思维导图，返回 {lesson_mindmap_mermaid, method_mindmap_mermaid, lesson_outline, method_outline}"""
+    if os.environ.get("LEKAI_MINDMAP_AI", "0") != "1":
+        return _fallback_mindmap(req)
+
     from rag import call_deepseek
 
     user_prompt = _build_user_prompt(req)
 
-    raw = call_deepseek(MINDMAP_SYSTEM, user_prompt, temperature=0.3)
-    data = parse_mindmap_json(raw)
+    try:
+        raw = call_deepseek(MINDMAP_SYSTEM, user_prompt, temperature=0.3)
+        data = parse_mindmap_json(raw)
+    except Exception:
+        return _fallback_mindmap(req)
 
     lesson_outline = data.get("lesson_outline", {})
     method_outline = data.get("method_outline", {})
@@ -279,8 +358,11 @@ def generate_dual_mindmap(req) -> dict:
 
     if not (lesson_ok and method_ok):
         # 自动重试一次
-        raw2 = call_deepseek(MINDMAP_SYSTEM, user_prompt, temperature=0.5)
-        data2 = parse_mindmap_json(raw2)
+        try:
+            raw2 = call_deepseek(MINDMAP_SYSTEM, user_prompt, temperature=0.5)
+            data2 = parse_mindmap_json(raw2)
+        except Exception:
+            return _fallback_mindmap(req)
         lesson_outline2 = data2.get("lesson_outline", {})
         method_outline2 = data2.get("method_outline", {})
         lesson_mermaid2 = outline_to_mermaid(lesson_outline2)
@@ -290,7 +372,7 @@ def generate_dual_mindmap(req) -> dict:
         method_ok2 = validate_method_mindmap(method_mermaid2)
 
         if not (lesson_ok2 and method_ok2):
-            raise RuntimeError("思维导图生成质量不达标，请重试")
+            return _fallback_mindmap(req)
 
         return {
             "lesson_mindmap_mermaid": lesson_mermaid2,
